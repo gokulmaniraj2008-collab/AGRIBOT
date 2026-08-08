@@ -1,9 +1,9 @@
-# AgriBot AI — Dashboard (v1)
+# AgriBot AI — Dashboard (v15)
 
 Next.js 15 + Supabase web dashboard for the AgriBot smart farming robot.
 Deployed on Vercel, works fully in mobile browsers.
 
-## What's in this v1
+## What's in this v15
 
 - Animated logo splash screen (`/`) → welcome screen (`/welcome`) → login
 - Email/password auth **and** "Continue with Google" (Supabase Auth),
