@@ -9,18 +9,20 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "16.3.0",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "lucide-react": "0.417.0",
-    "recharts": "3.10.1"
+    "@supabase/ssr": "0.5.2",
+    "@supabase/supabase-js": "^2.111.0",
+    "next": "^15.5.22",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "lucide-react": "0.469.0",
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
-    "typescript": "5.5.4",
+    "typescript": "5.7.3",
     "@types/node": "20.14.13",
-    "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
-    "tailwindcss": "3.4.7",
+    "@types/react": "19.0.2",
+    "@types/react-dom": "19.0.2",
+    "tailwindcss": "3.4.17",
     "postcss": "8.4.40",
     "autoprefixer": "10.4.19"
   }
