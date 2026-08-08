@@ -1,45 +1,55 @@
 import type { Config } from "tailwindcss";
 
-// LIGHT THEME ONLY — no `dark:` variants, no dark palette defined anywhere
-// in this file on purpose. Do not add darkMode config.
 const config: Config = {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  darkMode: "class",
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
   theme: {
     extend: {
       colors: {
-        bg: "#F8FAF9",
-        card: "#FFFFFF",
-        "bg-secondary": "#F1F5F3",
-        "text-primary": "#111827",
-        "text-secondary": "#6B7280",
-        border: "#E5E7EB",
-        primary: {
-          DEFAULT: "#16A34A",
-          light: "#DCFCE7",
-        },
-        emerald: "#10B981",
-        success: "#22C55E",
-        warning: "#F59E0B",
-        danger: "#EF4444",
-        info: "#3B82F6",
+        background: "#ffffff",
+        foreground: "#111827",
+        surface: "#f8faf9",
+        border: "#e6ebe8",
+        primary: "#16a34a",
+        primaryDark: "#15803d",
+        secondary: "#10b981",
+        info: "#2563eb",
+        warning: "#f59e0b",
+        danger: "#ef4444",
+        success: "#22c55e",
+        muted: "#6b7280",
       },
       fontFamily: {
-        display: ["'Plus Jakarta Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["var(--font-jakarta)", "system-ui", "sans-serif"],
       },
       borderRadius: {
         card: "16px",
       },
-      boxShadow: {
-        card: "0 1px 2px rgba(17, 24, 39, 0.04), 0 1px 8px rgba(17, 24, 39, 0.04)",
-        "card-hover": "0 2px 4px rgba(17, 24, 39, 0.06), 0 4px 16px rgba(17, 24, 39, 0.06)",
+      keyframes: {
+        "logo-pop": {
+          "0%": { opacity: "0", transform: "scale(0.85) translateY(8px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "loading-bar": {
+          from: { transform: "scaleX(0)" },
+          to: { transform: "scaleX(1)" },
+        },
       },
-      transitionDuration: {
-        DEFAULT: "200ms",
+      animation: {
+        "logo-pop": "logo-pop 0.7s ease-out both",
+        "fade-in": "fade-in 0.6s ease-out both",
+        "loading-bar": "loading-bar 1.3s ease-in-out 0.2s both",
       },
     },
   },
   plugins: [],
 };
-
 export default config;
