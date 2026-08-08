@@ -2,15 +2,201 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------
+   Tokens
+   AgriBot AI — light, field-ready UI. Green stays the working identity
+   (crops, not decoration); "soil" is the one warm accent, spent
+   sparingly on the signature dot-grid + status highlights.
+--------------------------------------------------------------------- */
+:root {
+  --color-background: #ffffff;
+  --color-foreground: #111827;
+  --color-surface: #f8faf9;
+  --color-border: #e6ebe8;
+
+  --color-primary: #16a34a;
+  --color-primary-dark: #15803d;
+  --color-secondary: #10b981;
+
+  --color-soil: #7c5537;
+  --color-soil-light: #f4ede7;
+
+  --color-info: #2563eb;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-muted: #6b7280;
+
+  --font-mono-readout: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 16px rgba(17, 24, 39, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.08);
+}
+
+/* ---------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------- */
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background-color: #ffffff;
-  color: #0f172a;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
 }
 
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* Tabular data — sensor readings, temps, percentages — gets the
+     instrument-panel treatment instead of the body font. */
+  .font-readout,
+  [data-readout] {
+    font-family: var(--font-mono-readout);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  ::selection {
+    background-color: var(--color-primary);
+    color: #ffffff;
+  }
+
+  /* Visible, on-brand focus ring for keyboard users — no focus:outline-none
+     anywhere in this app without a replacement ring. */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Components
+   Opt-in classes — existing screens keep working untouched; reach for
+   these on new/updated screens for a consistent system.
+--------------------------------------------------------------------- */
+@layer components {
+  .card {
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background-color: var(--color-primary);
+    color: #ffffff;
+    font-weight: 600;
+    border-radius: 12px;
+    padding: 0.625rem 1.25rem;
+    transition: background-color 0.15s ease;
+  }
+  .btn-primary:hover {
+    background-color: var(--color-primary-dark);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background-color: var(--color-surface);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border);
+    font-weight: 600;
+    border-radius: 12px;
+    padding: 0.625rem 1.25rem;
+    transition: background-color 0.15s ease;
+  }
+  .btn-secondary:hover {
+    background-color: var(--color-border);
+  }
+
+  /* Status badges — online/offline/alert states used across
+     Robot / Alerts / Dashboard tabs. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+  }
+  .badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background-color: currentColor;
+  }
+  .badge-success { background-color: #ecfdf3; color: var(--color-success); }
+  .badge-warning { background-color: #fffbeb; color: var(--color-warning); }
+  .badge-danger  { background-color: #fef2f2; color: var(--color-danger); }
+  .badge-info    { background-color: #eff6ff; color: var(--color-info); }
+  .badge-muted   { background-color: var(--color-surface); color: var(--color-muted); }
+
+  /* Signature: faint dot-grid, like sample points across a field.
+     Use on hero/header containers only — it's meant to be background
+     texture, not decoration everywhere. */
+  .field-grid {
+    background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .soil-accent {
+    background-color: var(--color-soil-light);
+    color: var(--color-soil);
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Motion
+--------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -18,5 +204,6 @@ body {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
-}
+  }
