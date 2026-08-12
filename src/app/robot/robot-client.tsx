@@ -1,0 +1,471 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { RobotStatus, SensorReading } from "@/lib/types";
+import { DashboardShell } from "@/components/dashboard-shell";
+import { StatusBadge } from "@/components/ui-kit";
+import {
+  Bot,
+  Battery,
+  MapPin,
+  Gauge,
+  Power,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Square,
+  Droplet,
+  Radar,
+  Zap,
+  Compass,
+  Home,
+} from "lucide-react";
+
+const SECTION_TINTS: Record<string, string> = {
+  status: "#16a34a",
+  mode: "#6366f1",
+  control: "#0ea5e9",
+  pump: "#0891b2",
+  irrigation: "#0ea5e9",
+};
+
+function tint(color: string) {
+  return { backgroundImage: `linear-gradient(135deg, ${color}14 0%, ${color}05 100%)` };
+}
+
+export default function RobotClient({
+  initialStatus,
+  initialLatest,
+}: {
+  initialStatus: RobotStatus | null;
+  initialLatest: SensorReading | null;
+}) {
+  const supabase = createClient();
+  const [status, setStatus] = useState<RobotStatus | null>(initialStatus);
+  const [latest, setLatest] = useState<SensorReading | null>(initialLatest);
+  const [sending, setSending] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: statusRow }, { data: latestRow }] = await Promise.all([
+        supabase
+          .from("robot_status")
+          .select("*")
+          .eq("robot_id", "agribot-01")
+          .single<RobotStatus>(),
+        supabase
+          .from("sensor_data")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle<SensorReading>(),
+      ]);
+      if (cancelled) return;
+      if (statusRow) setStatus(statusRow);
+      if (latestRow) setLatest(latestRow);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("robot_status_changes_page")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "robot_status",
+          filter: "robot_id=eq.agribot-01",
+        },
+        (payload) => setStatus(payload.new as RobotStatus)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("sensor_data_latest_page")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sensor_data" },
+        (payload) => setLatest(payload.new as SensorReading)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  const sendCommand = useCallback(async (command: string, value?: number) => {
+    setSending(command);
+    try {
+      await fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command, value }),
+      });
+    } finally {
+      setSending(null);
+    }
+  }, []);
+
+  const isOnline = status?.online ?? false;
+  const isStale =
+    status?.updated_at &&
+    Date.now() - new Date(status.updated_at).getTime() > 30_000;
+  const active = isOnline && !isStale;
+
+  return (
+    <DashboardShell title="Robot Control" subtitle="AgriBot AI — Unit 01" online={active}>
+      <>
+        <section className="rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.status)}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-full text-white shadow-sm"
+                style={{ backgroundColor: SECTION_TINTS.status }}
+              >
+                <Bot className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                  AgriBot AI — Unit 01
+                </p>
+                <p className="mt-0.5 text-xs text-muted dark:text-gray-400">
+                  {status?.mode === "auto" ? "Auto Scan" : "Manual"}
+                </p>
+              </div>
+            </div>
+            <StatusBadge label={active ? "Online" : "Offline"} tone={active ? "success" : "muted"} />
+          </div>
+
+          {/* Battery bar — mirrors the reference mockup's inline battery meter */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1 font-medium text-foreground dark:text-gray-200">
+                <Battery className="h-3.5 w-3.5" /> Battery
+              </span>
+              <span className="font-semibold text-foreground dark:text-gray-100">
+                {latest?.battery_percent != null ? `${latest.battery_percent.toFixed(0)}%` : "—"}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/60 dark:bg-gray-800">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${Math.max(0, Math.min(100, latest?.battery_percent ?? 0))}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2.5 text-sm">
+            <InfoRow
+              icon={<MapPin className="h-4 w-4" />}
+              color="#f97316"
+              label="GPS"
+              value={latest?.latitude != null && latest?.longitude != null ? "Connected" : "No signal"}
+            />
+            <InfoRow
+              icon={<Power className="h-4 w-4" />}
+              color="#0ea5e9"
+              label="Mode"
+              value={status?.mode === "auto" ? "Auto" : "Manual"}
+            />
+          </div>
+        </section>
+
+        {/* Telemetry — every value below comes from a real column on robot_status / sensor_data */}
+        <section className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Telemetry
+          </p>
+          <div className="grid grid-cols-2 gap-2.5 text-sm md:grid-cols-3">
+            <InfoRow
+              icon={<Gauge className="h-4 w-4" />}
+              color="#6366f1"
+              label="Speed setpoint"
+              value={status ? `${status.speed_value}` : "—"}
+            />
+            <InfoRow
+              icon={<Radar className="h-4 w-4" />}
+              color="#a855f7"
+              label="Ultrasonic"
+              value={latest?.distance_cm != null ? `${latest.distance_cm.toFixed(0)} cm` : "—"}
+            />
+            <InfoRow
+              icon={<Zap className="h-4 w-4" />}
+              color="#16a34a"
+              label="Voltage"
+              value={latest?.battery_voltage != null ? `${latest.battery_voltage.toFixed(1)} V` : "—"}
+            />
+            <InfoRow
+              icon={<MapPin className="h-4 w-4" />}
+              color="#f97316"
+              label="Latitude"
+              value={latest?.latitude != null ? latest.latitude.toFixed(4) : "—"}
+            />
+            <InfoRow
+              icon={<MapPin className="h-4 w-4" />}
+              color="#f97316"
+              label="Longitude"
+              value={latest?.longitude != null ? latest.longitude.toFixed(4) : "—"}
+            />
+            <InfoRow
+              icon={<Bot className="h-4 w-4" />}
+              color="#0ea5e9"
+              label="Motor state"
+              value={status?.motor_state ?? "stopped"}
+            />
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.mode)}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground dark:text-gray-100">Mode</span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => sendCommand("set_mode_manual")}
+              disabled={sending === "set_mode_manual"}
+              className={`rounded-xl py-2.5 text-xs font-medium shadow-sm transition ${
+                status?.mode === "manual"
+                  ? "bg-primary text-white"
+                  : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
+              }`}
+            >
+              Manual
+            </button>
+            <button
+              onClick={() => sendCommand("set_mode_auto")}
+              disabled={sending === "set_mode_auto"}
+              className={`rounded-xl py-2.5 text-xs font-medium shadow-sm transition ${
+                status?.mode === "auto"
+                  ? "bg-primary text-white"
+                  : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
+              }`}
+            >
+              Auto
+            </button>
+            {/* Patrol & Return-home aren't wired to firmware yet (no matching RobotCommand) —
+                shown but disabled rather than faked, so the UI never lies about what the robot will do. */}
+            <button
+              disabled
+              title="Not available yet — no patrol command in firmware"
+              className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/60 py-2 text-[10px] font-medium text-muted opacity-60 dark:bg-gray-900/60"
+            >
+              <Compass className="h-3.5 w-3.5" />
+              Patrol
+            </button>
+            <button
+              disabled
+              title="Not available yet — no return-to-home command in firmware"
+              className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/60 py-2 text-[10px] font-medium text-muted opacity-60 dark:bg-gray-900/60"
+            >
+              <Home className="h-3.5 w-3.5" />
+              Home
+            </button>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.control)}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground dark:text-gray-100">
+              Manual Control
+            </span>
+            <span className="text-xs capitalize text-muted dark:text-gray-400">
+              {status?.motor_state ?? "stopped"}
+            </span>
+          </div>
+
+          <div className="mx-auto grid w-44 grid-cols-3 gap-2.5">
+            <div />
+            <DirButton
+              icon={<ArrowUp className="h-5 w-5" />}
+              onClick={() => sendCommand("forward")}
+              disabled={status?.mode === "auto"}
+            />
+            <div />
+            <DirButton
+              icon={<ArrowLeft className="h-5 w-5" />}
+              onClick={() => sendCommand("left")}
+              disabled={status?.mode === "auto"}
+            />
+            <DirButton
+              icon={<Square className="h-5 w-5" />}
+              onClick={() => sendCommand("stop")}
+              disabled={status?.mode === "auto"}
+              variant="danger"
+            />
+            <DirButton
+              icon={<ArrowRight className="h-5 w-5" />}
+              onClick={() => sendCommand("right")}
+              disabled={status?.mode === "auto"}
+            />
+            <div />
+            <DirButton
+              icon={<ArrowDown className="h-5 w-5" />}
+              onClick={() => sendCommand("backward")}
+              disabled={status?.mode === "auto"}
+            />
+            <div />
+          </div>
+
+          {status?.mode === "auto" && (
+            <p className="mt-3 text-center text-xs text-muted dark:text-gray-400">
+              Switch to Manual mode to drive the robot directly.
+            </p>
+          )}
+
+          {/* Emergency stop works regardless of mode — same "stop" command, always enabled */}
+          <button
+            onClick={() => sendCommand("stop")}
+            disabled={sending === "stop"}
+            className="mt-4 w-full rounded-xl bg-danger py-3 text-sm font-bold tracking-wide text-white shadow-sm shadow-danger/30 transition hover:bg-red-600 active:scale-[0.98] disabled:opacity-60"
+          >
+            EMERGENCY STOP
+          </button>
+        </section>
+
+        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.pump)}>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground dark:text-gray-100">
+              <Droplet className="h-4 w-4" style={{ color: SECTION_TINTS.pump }} />
+              Water Pump
+            </span>
+            <button
+              onClick={() =>
+                sendCommand(status?.pump_status ? "pump_off" : "pump_on")
+              }
+              disabled={sending === "pump_on" || sending === "pump_off"}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium shadow-sm transition ${
+                status?.pump_status
+                  ? "text-white"
+                  : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
+              }`}
+              style={status?.pump_status ? { backgroundColor: SECTION_TINTS.pump } : undefined}
+            >
+              {status?.pump_status ? "Turn Off" : "Turn On"}
+            </button>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.irrigation)}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground dark:text-gray-100">Irrigation Control</span>
+            <span className="text-xs text-muted dark:text-gray-400">
+              Threshold {status?.irrigation_threshold ?? "—"}%
+            </span>
+          </div>
+          <ToggleButton
+            icon={<Droplet className="h-3.5 w-3.5" />}
+            label="Auto Irrigation"
+            on={status?.irrigation_auto ?? false}
+            color={SECTION_TINTS.irrigation}
+            onClick={() =>
+              sendCommand(status?.irrigation_auto ? "set_irrigation_auto_off" : "set_irrigation_auto_on")
+            }
+            disabled={sending === "set_irrigation_auto_on" || sending === "set_irrigation_auto_off"}
+            full
+          />
+          <p className="mt-2 text-xs text-muted dark:text-gray-400">
+            When enabled, the robot waters automatically once soil moisture drops below the threshold.
+          </p>
+        </section>
+      </>
+    </DashboardShell>
+  );
+}
+
+function ToggleButton({
+  icon,
+  label,
+  on,
+  onClick,
+  disabled,
+  full,
+  color = "#16a34a",
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  on: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  full?: boolean;
+  color?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${full ? "w-full" : ""} flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium shadow-sm transition disabled:opacity-50 ${
+        on ? "text-white" : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
+      }`}
+      style={on ? { backgroundColor: color } : undefined}
+    >
+      {icon}
+      {label} {on ? "· On" : "· Off"}
+    </button>
+  );
+}
+
+function InfoRow({
+  icon,
+  label,
+  value,
+  color = "#16a34a",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2.5 dark:bg-gray-900/50">
+      <span className="flex items-center gap-1.5 text-xs text-muted dark:text-gray-400">
+        <span
+          className="flex h-5 w-5 items-center justify-center rounded-md"
+          style={{ backgroundColor: `${color}22`, color }}
+        >
+          {icon}
+        </span>
+        {label}
+      </span>
+      <span className="text-xs font-medium text-foreground dark:text-gray-100">{value}</span>
+    </div>
+  );
+}
+
+function DirButton({
+  icon,
+  onClick,
+  disabled,
+  variant,
+}: {
+  icon: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "danger";
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex aspect-square items-center justify-center rounded-xl shadow-sm transition disabled:opacity-40 ${
+        variant === "danger"
+          ? "bg-danger/15 text-danger"
+          : "bg-white text-primary hover:bg-primary/10 dark:bg-gray-900"
+      }`}
+    >
+      {icon}
+    </button>
+  );
+        }
+                
