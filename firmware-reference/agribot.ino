@@ -220,7 +220,8 @@ void markCommandExecuted(long id) {
   http.end();
 }
 
-// Full command list per robot_commands_command_check in 0006_climate_control.sql
+// Only the commands this hardware supports — drive, pump, mode, irrigation.
+// (heater/cooler/vent exist in the DB schema but aren't handled here — no hardware for them yet.)
 void handleCommand(const String& command, float value) {
   StaticJsonDocument<128> patch;
 
@@ -234,19 +235,9 @@ void handleCommand(const String& command, float value) {
   else if (command == "set_speed")     setSpeed((int)value);
   else if (command == "set_mode_auto")   patch["mode"] = "auto";
   else if (command == "set_mode_manual") patch["mode"] = "manual";
-  else if (command == "heater_on")     { heaterOn();  patch["heater_status"] = true; }
-  else if (command == "heater_off")    { heaterOff(); patch["heater_status"] = false; }
-  else if (command == "cooler_on")     { coolerOn();  patch["cooler_status"] = true; }
-  else if (command == "cooler_off")    { coolerOff(); patch["cooler_status"] = false; }
-  else if (command == "vent_on")       { ventOn();  patch["vent_fan_status"] = true; }
-  else if (command == "vent_off")      { ventOff(); patch["vent_fan_status"] = false; }
   else if (command == "set_irrigation_auto_on")  { irrigationAuto = true;  patch["irrigation_auto"] = true; }
   else if (command == "set_irrigation_auto_off") { irrigationAuto = false; patch["irrigation_auto"] = false; }
   else if (command == "set_irrigation_threshold") { irrigationThreshold = value; patch["irrigation_threshold"] = value; }
-  else if (command == "set_ventilation_auto_on")  patch["ventilation_auto"] = true;
-  else if (command == "set_ventilation_auto_off") patch["ventilation_auto"] = false;
-  else if (command == "set_target_temp_min") patch["target_temp_min"] = value;
-  else if (command == "set_target_temp_max") patch["target_temp_max"] = value;
 
   if (patch.size() > 0) patchRobotStatus(patch);
 }
@@ -281,10 +272,6 @@ void setupActuatorPins() {
 
   pinMode(PUMP_RELAY_PIN, OUTPUT);
   digitalWrite(PUMP_RELAY_PIN, LOW); // relay off at boot
-
-  // Heater/cooler/vent fan aren't in your parts list yet — these are
-  // no-ops for now so handleCommand() doesn't crash if the dashboard
-  // sends those commands. Wire real relays and fill these in later.
 }
 
 /* ============================================================
@@ -382,14 +369,3 @@ void setSpeed(int speed) {
 void pumpOn()  { digitalWrite(PUMP_RELAY_PIN, HIGH); }
 void pumpOff() { digitalWrite(PUMP_RELAY_PIN, LOW); }
 
-/* ============================================================
-   Not in your current parts list — safe no-ops so handleCommand()
-   doesn't break if these commands arrive from the dashboard.
-   Wire real relays/actuators and replace these when you add them.
-   ============================================================ */
-void heaterOn()  {}
-void heaterOff() {}
-void coolerOn()  {}
-void coolerOff() {}
-void ventOn()    {}
-void ventOff()   {}
