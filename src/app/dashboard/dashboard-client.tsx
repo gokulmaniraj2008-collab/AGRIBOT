@@ -8,8 +8,8 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatCard, AIBanner, SectionHeading, StatusBadge } from "@/components/ui-kit";
 import VideoQuickBox from "@/components/video-quick-box";
 import {
-  Droplets, Thermometer, Wind, Battery, Map, Bell, Sparkles, Leaf,
-  ChevronRight, LineChart as LineChartIcon, Bot, Camera, FlaskConical, Waves,
+  Droplets, Thermometer, Wind, Battery, Map, Bell, Sparkles,
+  ChevronRight, LineChart as LineChartIcon, Bot, Camera,
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -182,54 +182,6 @@ export default function DashboardClient({
             percent={latest?.battery_percent ?? undefined}
           />
         </div>
-      </div>
-
-      <div className="mt-4">
-        <SectionHeading eyebrow="Soil Chemistry" title="pH & Nutrients" />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard
-            icon={FlaskConical}
-            label="pH Level"
-            value={latest?.ph_level != null ? latest.ph_level.toFixed(1) : "—"}
-            color="#a855f7"
-            data={seriesFor("ph_level")}
-          />
-          <StatCard
-            icon={Leaf}
-            label="Nitrogen (N)"
-            value={latest?.nitrogen != null ? latest.nitrogen.toFixed(0) : "—"}
-            unit="mg/kg"
-            color="#16a34a"
-            data={seriesFor("nitrogen")}
-          />
-          <StatCard
-            icon={Leaf}
-            label="Phosphorus (P)"
-            value={latest?.phosphorus != null ? latest.phosphorus.toFixed(0) : "—"}
-            unit="mg/kg"
-            color="#0891b2"
-            data={seriesFor("phosphorus")}
-          />
-          <StatCard
-            icon={Leaf}
-            label="Potassium (K)"
-            value={latest?.potassium != null ? latest.potassium.toFixed(0) : "—"}
-            unit="mg/kg"
-            color="#ca8a04"
-            data={seriesFor("potassium")}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <StatCard
-          icon={Waves}
-          label="Water Tank Level"
-          value={latest?.water_tank_percent != null ? latest.water_tank_percent.toFixed(0) : "—"}
-          unit="%"
-          color="#0ea5e9"
-          percent={latest?.water_tank_percent ?? undefined}
-        />
       </div>
 
       <Card className="mt-4 p-4">
