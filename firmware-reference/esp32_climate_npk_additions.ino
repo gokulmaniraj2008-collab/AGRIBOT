@@ -1,6 +1,6 @@
 /* ============================================================
-   AgriBot ESP32 — Additions for pH / NPK / Water Tank sensors
-   and Climate / Irrigation / Ventilation actuator control.
+   AgriBot ESP32 — Additions for Climate / Irrigation /
+   Ventilation actuator control.
 
    This is a REFERENCE snippet to merge into your existing
    ESP32 sketch — it assumes you already have:
@@ -19,12 +19,6 @@ const char* SERVICE_ROLE_KEY = "YOUR_SERVICE_ROLE_KEY"; // device-only, never in
 const char* ROBOT_ID = "agribot-01";
 
 // ---- New pin assignments (adjust to your wiring) ----
-const int PH_SENSOR_PIN       = 34; // analog pH probe
-const int NPK_SENSOR_RX       = 16; // NPK sensor (RS485/UART, e.g. JXBS-3001-NPK)
-const int NPK_SENSOR_TX       = 17;
-const int WATER_TANK_TRIG_PIN = 25; // ultrasonic sensor on tank
-const int WATER_TANK_ECHO_PIN = 26;
-
 const int HEATER_RELAY_PIN    = 27;
 const int COOLER_RELAY_PIN    = 14;
 const int VENT_FAN_RELAY_PIN  = 12;
@@ -38,52 +32,11 @@ void setupActuatorPins() {
   digitalWrite(VENT_FAN_RELAY_PIN, LOW);
 }
 
-// ---- Reading the new sensors ----
-
-float readPhLevel() {
-  int raw = analogRead(PH_SENSOR_PIN);
-  float voltage = raw * (3.3 / 4095.0);
-  // Calibrate with pH 4.0 and 7.0 buffer solutions for your probe.
-  // Placeholder linear formula — replace slope/offset after calibration.
-  float ph = 7.0 - ((voltage - 2.5) / 0.18);
-  return ph;
-}
-
-// NPK sensors are usually RS485 Modbus — this is a stub showing the
-// shape of the read; use a library like ModbusMaster for the real call.
-struct NpkReading { float n, p, k; };
-
-NpkReading readNpk() {
-  NpkReading r;
-  // Replace with actual Modbus register read (registers 0x001E, 0x001F, 0x0020
-  // are typical for JXBS-3001-NPK, but confirm against your sensor's datasheet).
-  r.n = 0; r.p = 0; r.k = 0;
-  return r;
-}
-
-float readWaterTankPercent(float tankHeightCm) {
-  digitalWrite(WATER_TANK_TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(WATER_TANK_TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(WATER_TANK_TRIG_PIN, LOW);
-  long duration = pulseIn(WATER_TANK_ECHO_PIN, HIGH, 30000);
-  float distanceCm = duration * 0.0343 / 2.0;
-  float fullDistance = 5.0;       // distance sensor-to-water when tank is full
-  float emptyDistance = tankHeightCm; // distance sensor-to-bottom when empty
-  float percent = 100.0 * (emptyDistance - distanceCm) / (emptyDistance - fullDistance);
-  return constrain(percent, 0, 100);
-}
-
 // ---- Extend your existing sensor_data POST payload ----
 
 void postSensorData(float soilMoisture, float temperature, float humidity,
                      float distanceCm, float batteryVoltage, float batteryPercent,
                      double lat, double lng) {
-  float ph = readPhLevel();
-  NpkReading npk = readNpk();
-  float waterTank = readWaterTankPercent(30.0); // pass your actual tank height in cm
-
   StaticJsonDocument<512> doc;
   doc["soil_moisture"] = soilMoisture;
   doc["temperature"] = temperature;
@@ -93,12 +46,6 @@ void postSensorData(float soilMoisture, float temperature, float humidity,
   doc["battery_percent"] = batteryPercent;
   doc["latitude"] = lat;
   doc["longitude"] = lng;
-  // New fields matching migration 0006_climate_control.sql:
-  doc["ph_level"] = ph;
-  doc["nitrogen"] = npk.n;
-  doc["phosphorus"] = npk.p;
-  doc["potassium"] = npk.k;
-  doc["water_tank_percent"] = waterTank;
 
   String payload;
   serializeJson(doc, payload);
