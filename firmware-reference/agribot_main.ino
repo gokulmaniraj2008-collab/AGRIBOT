@@ -1,28 +1,17 @@
 /*
-  AGRIBOT — Main ESP32 Firmware
-  ---------------------------------------------------------
-  Handles: motors (L298N), DHT22, soil moisture, HC-SR04,
-  water pump relay, GPS (NEO-6M), and syncing with Supabase.
+  AGRIBOT — ESP32 firmware reference
+  Supabase connectivity + sensor/status/command sync.
 
-  Flow:
-    1. Every SENSOR_INTERVAL_MS -> read sensors, POST to
-       sensor_data table.
-    2. Every STATUS_INTERVAL_MS -> PATCH robot_status (online,
-       mode, pump, motor state, speed).
-    3. Every COMMAND_POLL_MS -> GET pending rows from
-       robot_commands (executed = false), run them, mark
-       executed = true.
+  SECURITY:
+  Do NOT put a Supabase service_role key in this file or commit it to GitHub.
+  Use the anon/publishable key only if your database RLS policies permit the
+  device operations, or preferably put device authentication behind a secure
+  server/Edge Function. The old exposed service_role key must be rotated.
 
-  Auth: uses the Supabase service_role key so it bypasses RLS.
-  NEVER commit this key to a public repo. Keep this file (or
-  at least the key) out of version control.
-
-  Libraries needed (Arduino IDE Library Manager):
-    - WiFi (built-in, ESP32 core)
-    - HTTPClient (built-in, ESP32 core)
-    - ArduinoJson (by Benoit Blanchon)
-    - DHT sensor library (by Adafruit) + Adafruit Unified Sensor
-    - TinyGPSPlus (by Mikal Hart)
+  Current wiring map:
+    L298N ENA=14, IN1=27, IN2=26, IN3=25, IN4=33, ENB=32
+    DHT22=4, Soil AO=35, HC-SR04 Trig=18 Echo=19
+    Relay IN=23, GPS RX=16 TX=17, Servo=15
 */
 
 #include <WiFi.h>
@@ -33,194 +22,93 @@
 #include <TinyGPSPlus.h>
 #include <ESP32Servo.h>
 
-// ---------------- WiFi / Supabase config ----------------
-const char* WIFI_SSID     = "AGRIBOT_WIFI";
-const char* WIFI_PASSWORD = "12345678";
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
-const char* SUPABASE_URL         = "https://hvnasippwadzygnaodpp.supabase.coconst";
-const char* SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8"; // keep secret, device-only
-
+const char* SUPABASE_URL = "https://hvnasippwadzygnaodpp.supabase.co";
+// Use a publishable/anon key only. Never commit a service_role key.
+const char* SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
 const char* ROBOT_ID = "agribot-01";
 
-// ---------------- Pin map ----------------
-#define ENA_PIN   25   // left motors PWM
-#define IN1_PIN   26
-#define IN2_PIN   27
-#define ENB_PIN   14   // right motors PWM
-#define IN3_PIN   13
-#define IN4_PIN   23
+#define ENA_PIN 14
+#define IN1_PIN 27
+#define IN2_PIN 26
+#define IN3_PIN 25
+#define IN4_PIN 33
+#define ENB_PIN 32
+#define DHT_PIN 4
+#define DHT_TYPE DHT22
+#define SOIL_PIN 35
+#define TRIG_PIN 18
+#define ECHO_PIN 19
+#define RELAY_PIN 23
+#define GPS_RX_PIN 16
+#define GPS_TX_PIN 17
+#define SERVO_PIN 15
+#define LED_WIFI_PIN 21
+#define LED_PUMP_PIN 22
 
-#define DHT_PIN   4
-#define DHT_TYPE  DHT22
-
-#define SOIL_PIN  32   // analog
-
-#define TRIG_PIN  18
-#define ECHO_PIN  19
-
-#define RELAY_PIN 33
-
-#define GPS_RX_PIN 16  // ESP32 RX2 <- GPS TX
-#define GPS_TX_PIN 17  // ESP32 TX2 -> GPS RX
-
-#define SERVO_PIN 15   // soil probe arm servo (SG90)
-#define SERVO_UP_ANGLE   0
-#define SERVO_DOWN_ANGLE 90
-
-#define LED_WIFI_PIN 21  // red LED — WiFi status
-#define LED_PUMP_PIN 22  // red LED — pump status
-
-// ---------------- Timing ----------------
-const unsigned long SENSOR_INTERVAL_MS  = 10000;
-const unsigned long STATUS_INTERVAL_MS  = 5000;
-const unsigned long COMMAND_POLL_MS     = 2000;
+const unsigned long SENSOR_INTERVAL_MS = 10000;
+const unsigned long STATUS_INTERVAL_MS = 5000;
+const unsigned long COMMAND_POLL_MS = 2000;
 
 unsigned long lastSensorPush = 0;
 unsigned long lastStatusPush = 0;
 unsigned long lastCommandPoll = 0;
 
-// ---------------- State ----------------
 DHT dht(DHT_PIN, DHT_TYPE);
 HardwareSerial gpsSerial(2);
 TinyGPSPlus gps;
 Servo probeServo;
-bool probeDown = false;
 
 String currentMode = "manual";
 bool pumpStatus = false;
 String motorState = "stopped";
-int speedValue = 200; // default PWM 0-255
+int speedValue = 200;
 
-// =========================================================
-void setup() {
-  Serial.begin(57600);
-
-  pinMode(ENA_PIN, OUTPUT);
-  pinMode(IN1_PIN, OUTPUT);
-  pinMode(IN2_PIN, OUTPUT);
-  pinMode(ENB_PIN, OUTPUT);
-  pinMode(IN3_PIN, OUTPUT);
-  pinMode(IN4_PIN, OUTPUT);
-  pinMode(RELAY_PIN, OUTPUT);
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  pinMode(LED_WIFI_PIN, OUTPUT);
-  pinMode(LED_PUMP_PIN, OUTPUT);
-  digitalWrite(LED_WIFI_PIN, LOW);
-  digitalWrite(LED_PUMP_PIN, LOW);
-
-  digitalWrite(RELAY_PIN, LOW);
-  stopMotors();
-
-  dht.begin();
-  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-
-  probeServo.attach(SERVO_PIN);
-  probeServo.write(SERVO_UP_ANGLE); // start lifted, safe for driving
-  probeDown = false;
-
-  connectWiFi();
+void addHeaders(HTTPClient& http) {
+  http.addHeader("apikey", SUPABASE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
+  http.addHeader("Content-Type", "application/json");
 }
 
-void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-  }
-
-  // feed GPS parser continuously
-  while (gpsSerial.available() > 0) {
-    gps.encode(gpsSerial.read());
-  }
-
-  unsigned long now = millis();
-
-  if (now - lastSensorPush >= SENSOR_INTERVAL_MS) {
-    lastSensorPush = now;
-    pushSensorData();
-  }
-
-  if (now - lastStatusPush >= STATUS_INTERVAL_MS) {
-    lastStatusPush = now;
-    pushRobotStatus();
-  }
-
-  if (now - lastCommandPoll >= COMMAND_POLL_MS) {
-    lastCommandPoll = now;
-    pollCommands();
-  }
-}
-
-// ---------------- WiFi ----------------
 void connectWiFi() {
-  Serial.print("Connecting to WiFi");
+  if (WiFi.status() == WL_CONNECTED) return;
+  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+  Serial.print("Connecting to WiFi");
+  for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
     delay(500);
-    Serial.print(".");
-    digitalWrite(LED_WIFI_PIN, !digitalRead(LED_WIFI_PIN)); // blink while connecting
-    attempts++;
+    Serial.print('.');
   }
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("Connected, IP: ");
+    Serial.print("WiFi OK, IP: ");
     Serial.println(WiFi.localIP());
-    digitalWrite(LED_WIFI_PIN, HIGH); // solid on = connected
+    digitalWrite(LED_WIFI_PIN, HIGH);
   } else {
-    Serial.println("WiFi connect failed, will retry in loop.");
+    Serial.println("WiFi connection failed");
     digitalWrite(LED_WIFI_PIN, LOW);
   }
 }
 
-// ---------------- Sensor reading + push ----------------
-float readUltrasonicCm() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // 30ms timeout
-  if (duration == 0) return -1;
-  return duration * 0.0343 / 2.0;
-}
-
-float readBatteryVoltage() {
-  // Placeholder: wire a voltage divider from battery+ into an
-  // ADC pin if you want real readings. Returns -1 until wired.
-  return -1;
-}
-
-void pushSensorData() {
-  float humidity = dht.readHumidity();
-  float temperature = dht.readTemperature();
-  int soilRaw = analogRead(SOIL_PIN);
-  float distance = readUltrasonicCm();
-  float batteryVoltage = readBatteryVoltage();
-
-  double lat = gps.location.isValid() ? gps.location.lat() : 0;
-  double lng = gps.location.isValid() ? gps.location.lng() : 0;
-
-  StaticJsonDocument<512> doc;
-  doc["soil_moisture"] = soilRaw;
-  if (!isnan(temperature)) doc["temperature"] = temperature;
-  if (!isnan(humidity))    doc["humidity"] = humidity;
-  if (distance > 0)        doc["distance_cm"] = distance;
-  if (batteryVoltage > 0)  doc["battery_voltage"] = batteryVoltage;
-  if (gps.location.isValid()) {
-    doc["latitude"] = lat;
-    doc["longitude"] = lng;
+int postJson(const String& url, const String& payload, bool upsert) {
+  HTTPClient http;
+  http.setTimeout(8000);
+  if (!http.begin(url)) return -1;
+  addHeaders(http);
+  if (upsert) http.addHeader("Prefer", "resolution=merge-duplicates,return=minimal");
+  int code = http.POST(payload);
+  if (code >= 300 || code < 0) {
+    Serial.printf("POST HTTP %d: %s\n", code, http.getString().c_str());
   }
-
-  String payload;
-  serializeJson(doc, payload);
-
-  String url = String(SUPABASE_URL) + "/rest/v1/sensor_data";
-  httpPost(url, payload, false);
+  http.end();
+  return code;
 }
 
-// ---------------- Robot status push ----------------
 void pushRobotStatus() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
   StaticJsonDocument<256> doc;
   doc["robot_id"] = ROBOT_ID;
   doc["online"] = true;
@@ -228,129 +116,125 @@ void pushRobotStatus() {
   doc["pump_status"] = pumpStatus;
   doc["motor_state"] = motorState;
   doc["speed_value"] = speedValue;
-  doc["updated_at"] = "now()"; // ignored by PostgREST as literal string; DB default handles it too
 
   String payload;
   serializeJson(doc, payload);
 
-  // upsert via PostgREST: POST with Prefer: resolution=merge-duplicates
+  // The database should supply updated_at with its default timestamp.
   String url = String(SUPABASE_URL) + "/rest/v1/robot_status?on_conflict=robot_id";
-  httpPost(url, payload, true);
+  int code = postJson(url, payload, true);
+  if (code >= 200 && code < 300) Serial.println("Supabase heartbeat: ONLINE");
 }
 
-// ---------------- Command polling ----------------
-void pollCommands() {
-  String url = String(SUPABASE_URL) +
-    "/rest/v1/robot_commands?robot_id=eq." + ROBOT_ID +
-    "&executed=eq.false&order=created_at.asc&limit=5";
+float readUltrasonicCm() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  unsigned long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  return duration ? duration * 0.0343f / 2.0f : -1;
+}
 
+void pushSensorData() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
+  int soilRaw = analogRead(SOIL_PIN);
+  float distance = readUltrasonicCm();
+
+  StaticJsonDocument<512> doc;
+  doc["robot_id"] = ROBOT_ID;
+  doc["soil_moisture"] = soilRaw;
+  if (!isnan(temperature)) doc["temperature"] = temperature;
+  if (!isnan(humidity)) doc["humidity"] = humidity;
+  if (distance > 0) doc["distance_cm"] = distance;
+  if (gps.location.isValid()) {
+    doc["latitude"] = gps.location.lat();
+    doc["longitude"] = gps.location.lng();
+  }
+
+  String payload;
+  serializeJson(doc, payload);
+  postJson(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload, false);
+}
+
+void executeCommand(const String& command, int value) {
+  if (command == "forward") {
+    digitalWrite(IN1_PIN, HIGH); digitalWrite(IN2_PIN, LOW);
+    digitalWrite(IN3_PIN, HIGH); digitalWrite(IN4_PIN, LOW);
+    motorState = "forward";
+  } else if (command == "backward") {
+    digitalWrite(IN1_PIN, LOW); digitalWrite(IN2_PIN, HIGH);
+    digitalWrite(IN3_PIN, LOW); digitalWrite(IN4_PIN, HIGH);
+    motorState = "backward";
+  } else if (command == "left") {
+    digitalWrite(IN1_PIN, LOW); digitalWrite(IN2_PIN, HIGH);
+    digitalWrite(IN3_PIN, HIGH); digitalWrite(IN4_PIN, LOW);
+    motorState = "left";
+  } else if (command == "right") {
+    digitalWrite(IN1_PIN, HIGH); digitalWrite(IN2_PIN, LOW);
+    digitalWrite(IN3_PIN, LOW); digitalWrite(IN4_PIN, HIGH);
+    motorState = "right";
+  } else if (command == "stop") {
+    stopMotors();
+    motorState = "stopped";
+  } else if (command == "pump_on") {
+    digitalWrite(RELAY_PIN, HIGH);
+    digitalWrite(LED_PUMP_PIN, HIGH);
+    pumpStatus = true;
+  } else if (command == "pump_off") {
+    digitalWrite(RELAY_PIN, LOW);
+    digitalWrite(LED_PUMP_PIN, LOW);
+    pumpStatus = false;
+  } else if (command == "set_speed" && value >= 0 && value <= 255) {
+    speedValue = value;
+  } else if (command == "set_mode_auto") {
+    currentMode = "auto";
+  } else if (command == "set_mode_manual") {
+    currentMode = "manual";
+  }
+  applySpeed();
+}
+
+void markCommandExecuted(long id) {
   HTTPClient http;
-  http.begin(url);
-  http.addHeader("apikey", SUPABASE_SERVICE_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
+  String url = String(SUPABASE_URL) + "/rest/v1/robot_commands?id=eq." + String(id);
+  if (!http.begin(url)) return;
+  addHeaders(http);
+  http.addHeader("Prefer", "return=minimal");
+  http.PATCH("{\"executed\":true}");
+  http.end();
+}
 
+void pollCommands() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  String url = String(SUPABASE_URL) + "/rest/v1/robot_commands?robot_id=eq." + ROBOT_ID + "&executed=eq.false&order=created_at.asc&limit=5";
+  HTTPClient http;
+  if (!http.begin(url)) return;
+  addHeaders(http);
   int code = http.GET();
   if (code == 200) {
-    String response = http.getString();
-    DynamicJsonDocument doc(2048);
-    DeserializationError err = deserializeJson(doc, response);
-    if (!err) {
+    DynamicJsonDocument doc(4096);
+    if (!deserializeJson(doc, http.getString())) {
       for (JsonObject cmd : doc.as<JsonArray>()) {
-        long id = cmd["id"];
-        String command = cmd["command"].as<String>();
-        int value = cmd["value"].isNull() ? -1 : cmd["value"].as<int>();
+        long id = cmd["id"] | 0;
+        String command = cmd["command"] | "";
+        int value = cmd["value"].isNull() ? -1 : (int)cmd["value"];
         executeCommand(command, value);
         markCommandExecuted(id);
       }
     }
-  } else if (code > 0) {
-    Serial.printf("Command poll failed, HTTP %d\n", code);
+  } else if (code >= 300) {
+    Serial.printf("Command poll HTTP %d: %s\n", code, http.getString().c_str());
   }
   http.end();
 }
 
-void markCommandExecuted(long id) {
-  String url = String(SUPABASE_URL) + "/rest/v1/robot_commands?id=eq." + String(id);
-
-  StaticJsonDocument<128> doc;
-  doc["executed"] = true;
-  doc["executed_at"] = "now()";
-  String payload;
-  serializeJson(doc, payload);
-
-  HTTPClient http;
-  http.begin(url);
-  http.addHeader("apikey", SUPABASE_SERVICE_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
-  http.addHeader("Content-Type", "application/json");
-  http.PATCH(payload);
-  http.end();
-}
-
-// ---------------- Command execution ----------------
-void executeCommand(String command, int value) {
-  Serial.print("Executing: ");
-  Serial.println(command);
-
-  if (command == "forward")            { driveForward(); motorState = "forward"; }
-  else if (command == "backward")      { driveBackward(); motorState = "backward"; }
-  else if (command == "left")          { turnLeft(); motorState = "left"; }
-  else if (command == "right")         { turnRight(); motorState = "right"; }
-  else if (command == "stop")          { stopMotors(); motorState = "stopped"; }
-  else if (command == "pump_on")       { digitalWrite(RELAY_PIN, HIGH); digitalWrite(LED_PUMP_PIN, HIGH); pumpStatus = true; }
-  else if (command == "pump_off")      { digitalWrite(RELAY_PIN, LOW); digitalWrite(LED_PUMP_PIN, LOW); pumpStatus = false; }
-  else if (command == "set_speed" && value >= 0 && value <= 255) {
-    speedValue = value;
-    ledcWrite(ENA_PIN, speedValue); // if using ledcAttach; otherwise analogWrite works on ESP32 core 3.x
-    applySpeed();
-  }
-  else if (command == "set_mode_auto")   { currentMode = "auto"; }
-  else if (command == "set_mode_manual") { currentMode = "manual"; }
-  else if (command == "probe_down")      { lowerProbe(); }
-  else if (command == "probe_up")        { raiseProbe(); }
-}
-
-// ---------------- Soil probe arm (SG90) ----------------
-void lowerProbe() {
-  probeServo.write(SERVO_DOWN_ANGLE);
-  probeDown = true;
-  delay(700); // let the servo finish moving before anything else runs
-}
-
-void raiseProbe() {
-  probeServo.write(SERVO_UP_ANGLE);
-  probeDown = false;
-  delay(700);
-}
-
-// ---------------- Motor control ----------------
 void applySpeed() {
   analogWrite(ENA_PIN, speedValue);
   analogWrite(ENB_PIN, speedValue);
-}
-
-void driveForward() {
-  digitalWrite(IN1_PIN, HIGH); digitalWrite(IN2_PIN, LOW);
-  digitalWrite(IN3_PIN, HIGH); digitalWrite(IN4_PIN, LOW);
-  applySpeed();
-}
-
-void driveBackward() {
-  digitalWrite(IN1_PIN, LOW); digitalWrite(IN2_PIN, HIGH);
-  digitalWrite(IN3_PIN, LOW); digitalWrite(IN4_PIN, HIGH);
-  applySpeed();
-}
-
-void turnLeft() {
-  digitalWrite(IN1_PIN, LOW); digitalWrite(IN2_PIN, HIGH);
-  digitalWrite(IN3_PIN, HIGH); digitalWrite(IN4_PIN, LOW);
-  applySpeed();
-}
-
-void turnRight() {
-  digitalWrite(IN1_PIN, HIGH); digitalWrite(IN2_PIN, LOW);
-  digitalWrite(IN3_PIN, LOW); digitalWrite(IN4_PIN, HIGH);
-  applySpeed();
 }
 
 void stopMotors() {
@@ -360,22 +244,37 @@ void stopMotors() {
   analogWrite(ENB_PIN, 0);
 }
 
-// ---------------- HTTP helper ----------------
-void httpPost(String url, String payload, bool upsert) {
-  HTTPClient http;
-  http.begin(url);
-  http.addHeader("apikey", SUPABASE_SERVICE_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
-  http.addHeader("Content-Type", "application/json");
-  if (upsert) {
-    http.addHeader("Prefer", "resolution=merge-duplicates");
-  }
+void setup() {
+  Serial.begin(115200);
+  pinMode(ENA_PIN, OUTPUT); pinMode(IN1_PIN, OUTPUT); pinMode(IN2_PIN, OUTPUT);
+  pinMode(IN3_PIN, OUTPUT); pinMode(IN4_PIN, OUTPUT); pinMode(ENB_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT); pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
+  pinMode(LED_WIFI_PIN, OUTPUT); pinMode(LED_PUMP_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);
+  stopMotors();
+  dht.begin();
+  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  probeServo.attach(SERVO_PIN);
+  probeServo.write(0);
+  connectWiFi();
+  if (WiFi.status() == WL_CONNECTED) pushRobotStatus();
+}
 
-  int code = http.POST(payload);
-  if (code < 0) {
-    Serial.printf("POST failed: %s\n", http.errorToString(code).c_str());
-  } else if (code >= 300) {
-    Serial.printf("POST %s -> HTTP %d: %s\n", url.c_str(), code, http.getString().c_str());
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) connectWiFi();
+  while (gpsSerial.available()) gps.encode(gpsSerial.read());
+
+  unsigned long now = millis();
+  if (now - lastSensorPush >= SENSOR_INTERVAL_MS) {
+    lastSensorPush = now;
+    pushSensorData();
   }
-  http.end();
+  if (now - lastStatusPush >= STATUS_INTERVAL_MS) {
+    lastStatusPush = now;
+    pushRobotStatus();
+  }
+  if (now - lastCommandPoll >= COMMAND_POLL_MS) {
+    lastCommandPoll = now;
+    pollCommands();
+  }
 }
