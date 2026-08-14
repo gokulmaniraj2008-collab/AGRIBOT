@@ -12,6 +12,15 @@
     L298N ENA=14, IN1=27, IN2=26, IN3=25, IN4=33, ENB=32
     DHT22=4, Soil AO=35, HC-SR04 Trig=18 Echo=19
     Relay IN=23, GPS RX=16 TX=17, Servo=15
+    Battery sense (voltage divider) AO=34   <-- NEW, wire this up
+
+  BATTERY SENSE WIRING (GPIO34):
+    Battery+ -- R1 (100k) --+-- R2 (33k) -- GND
+                             |
+                          GPIO34
+    This divides the pack voltage down into the ESP32's 0-3.3V ADC range.
+    Adjust R1_OHMS/R2_OHMS below to match whatever resistors you actually use,
+    and BATTERY_MAX_V/BATTERY_MIN_V to your pack's full/empty voltage.
 */
 
 #include <WiFi.h>
@@ -47,6 +56,22 @@ const char* ROBOT_ID = "agribot-01";
 #define SERVO_PIN 15
 #define LED_WIFI_PIN 21
 #define LED_PUMP_PIN 22
+#define BATTERY_PIN 34
+
+// --- Soil moisture calibration ---
+// Dip the probe in dry air and in water, watch the Serial monitor for the
+// raw analogRead() value in each case, then plug those numbers in here.
+const int SOIL_DRY_RAW = 3000;  // raw ADC reading in dry air  (0% moisture)
+const int SOIL_WET_RAW = 1200;  // raw ADC reading in water    (100% moisture)
+
+// --- Battery sense calibration ---
+// R1 = high side (battery+ to ADC pin), R2 = low side (ADC pin to GND)
+const float R1_OHMS = 100000.0f;
+const float R2_OHMS = 33000.0f;
+const float ADC_REF_V = 3.3f;
+const float ADC_MAX_COUNTS = 4095.0f;
+const float BATTERY_MAX_V = 12.6f;  // pack voltage at 100%
+const float BATTERY_MIN_V = 9.0f;   // pack voltage at 0%
 
 const unsigned long SENSOR_INTERVAL_MS = 10000;
 const unsigned long STATUS_INTERVAL_MS = 5000;
@@ -136,17 +161,43 @@ float readUltrasonicCm() {
   return duration ? duration * 0.0343f / 2.0f : -1;
 }
 
+float readSoilPercent() {
+  int soilRaw = analogRead(SOIL_PIN);
+  // Higher raw = drier soil for most capacitive/resistive probes, so this
+  // maps DRY->0% and WET->100%. Flip SOIL_DRY_RAW/SOIL_WET_RAW if your
+  // probe reads the opposite way.
+  int percent = map(soilRaw, SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100);
+  return constrain(percent, 0, 100);
+}
+
+float readBatteryPercent(float& outVoltage) {
+  int raw = analogRead(BATTERY_PIN);
+  float pinVoltage = (raw / ADC_MAX_COUNTS) * ADC_REF_V;
+  float batteryVoltage = pinVoltage * (R1_OHMS + R2_OHMS) / R2_OHMS;
+  outVoltage = batteryVoltage;
+  float percent = (batteryVoltage - BATTERY_MIN_V) / (BATTERY_MAX_V - BATTERY_MIN_V) * 100.0f;
+  return constrain(percent, 0.0f, 100.0f);
+}
+
 void pushSensorData() {
   if (WiFi.status() != WL_CONNECTED) return;
 
   float humidity = dht.readHumidity();
   float temperature = dht.readTemperature();
-  int soilRaw = analogRead(SOIL_PIN);
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("WARN: DHT22 read failed (NaN) - check wiring/power on DHT_PIN");
+  }
+
+  int soilPercent = readSoilPercent();
   float distance = readUltrasonicCm();
+  float batteryVoltage;
+  float batteryPercent = readBatteryPercent(batteryVoltage);
 
   StaticJsonDocument<512> doc;
   doc["robot_id"] = ROBOT_ID;
-  doc["soil_moisture"] = soilRaw;
+  doc["soil_moisture"] = soilPercent;
+  doc["battery_voltage"] = batteryVoltage;
+  doc["battery_percent"] = batteryPercent;
   if (!isnan(temperature)) doc["temperature"] = temperature;
   if (!isnan(humidity)) doc["humidity"] = humidity;
   if (distance > 0) doc["distance_cm"] = distance;
