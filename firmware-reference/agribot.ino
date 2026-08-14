@@ -7,7 +7,7 @@
 #include <ESP32Servo.h>
 
 // ---------------- WiFi / Supabase config ----------------
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
+const char* WIFI_SSID     = "AGRIBOT_WIFI";
 const char* WIFI_PASSWORD = "12345678";
 const char* SUPABASE_URL         = "https://hvnasippwadzygnaodpp.supabase.co";
 const char* SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8";
