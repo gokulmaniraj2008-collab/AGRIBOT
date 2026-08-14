@@ -37,8 +37,8 @@
 const char* WIFI_SSID     = "AGRIBOT_WIFI";
 const char* WIFI_PASSWORD = "12345678";
 
-const char* SUPABASE_URL         = "https://YOUR_PROJECT_REF.supabase.co";
-const char* SUPABASE_SERVICE_KEY = "YOUR_SERVICE_ROLE_KEY"; // keep secret, device-only
+const char* SUPABASE_URL         = "https://hvnasippwadzygnaodpp.supabase.co";
+const char* SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8"; // keep secret, device-only
 const char* SUPABASE_BUCKET      = "plant-images";
 
 const char* ROBOT_ID = "agribot-01";
@@ -128,6 +128,16 @@ bool initCamera() {
     Serial.printf("Camera init error 0x%x\n", err);
     return false;
   }
+
+  // OV3660-specific fix: this sensor mounts upside-down relative to
+  // OV2640 defaults, so flip the image right-side up.
+  sensor_t* s = esp_camera_sensor_get();
+  if (s->id.PID == OV3660_PID) {
+    s->set_vflip(s, 1);
+    s->set_brightness(s, 1);
+    s->set_saturation(s, -2);
+  }
+
   return true;
 }
 
