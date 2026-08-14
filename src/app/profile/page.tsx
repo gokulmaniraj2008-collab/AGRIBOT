@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { uploadImageToCloudinary } from "@/lib/cloudinary-image";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge, SectionHeading } from "@/components/ui-kit";
+import type { RobotStatus } from "@/lib/types";
 import {
   User,
   LogOut,
@@ -26,6 +27,7 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [robotStatus, setRobotStatus] = useState<RobotStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -43,6 +45,36 @@ export default function ProfilePage() {
       }
     });
   }, [supabase]);
+
+  useEffect(() => {
+    supabase
+      .from("robot_status")
+      .select("*")
+      .eq("robot_id", "agribot-01")
+      .single<RobotStatus>()
+      .then(({ data }) => {
+        if (data) setRobotStatus(data);
+      });
+
+    const channel = supabase
+      .channel("robot_status_changes_profile")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "robot_status", filter: "robot_id=eq.agribot-01" },
+        (payload) => setRobotStatus(payload.new as RobotStatus)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  const isOnline = robotStatus?.online ?? false;
+  const isStale =
+    robotStatus?.updated_at &&
+    Date.now() - new Date(robotStatus.updated_at).getTime() > 30_000;
+  const robotActive = isOnline && !isStale;
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -135,7 +167,10 @@ export default function ProfilePage() {
                 </p>
                 <p className="text-xs text-muted dark:text-gray-400">agribot-01</p>
               </div>
-              <StatusBadge label="ONLINE" tone="success" />
+              <StatusBadge
+                label={robotActive ? "ONLINE" : "OFFLINE"}
+                tone={robotActive ? "success" : "muted"}
+              />
             </Card>
 
             <Card className="flex items-center gap-3 p-3.5">
@@ -174,4 +209,4 @@ export default function ProfilePage() {
       </>
     </DashboardShell>
   );
-}
+                  }
