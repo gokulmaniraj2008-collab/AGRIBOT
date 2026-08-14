@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/lib/theme-context";
 import {
   LayoutDashboard, Map, Bot, Camera, LineChart, Sparkles, Leaf,
-  Bell, User, Shield, Menu, X, Sun, Moon, LogOut, Droplet, Settings, History, Brain, Wifi,
+  Bell, User, Shield, Menu, X, Sun, Moon, LogOut, Droplet, History, Brain, Wifi,
 } from "lucide-react";
 
 const BOTTOM_NAV_ITEMS = [
@@ -42,7 +42,6 @@ const NAV_SECTIONS = [
   },
   { label: "Account", items: [
     { href: "/profile", label: "Profile", icon: User },
-    { href: "/settings", label: "Settings", icon: Settings },
   ] },
 ];
 
@@ -258,4 +257,5 @@ export function DashboardShell({
   );
     }
 
-        
+
+            
