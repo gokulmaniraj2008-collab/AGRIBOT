@@ -31,8 +31,8 @@ const char* ROBOT_ID = "agribot-01";
 #define SERVO_PIN 15
 #define SERVO_UP_ANGLE   0
 #define SERVO_DOWN_ANGLE 90
-#define LED_WIFI_PIN 21  // red LED — WiFi status
-#define LED_PUMP_PIN 22  // red LED — pump status
+#define LED_WIFI_PIN 21
+#define LED_PUMP_PIN 22
 
 // ---------------- Timing ----------------
 const unsigned long SENSOR_INTERVAL_MS  = 10000;
@@ -82,7 +82,7 @@ void connectWiFi() {
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 40) {
     delay(500); Serial.print(".");
-    digitalWrite(LED_WIFI_PIN, !digitalRead(LED_WIFI_PIN)); // blink while connecting
+    digitalWrite(LED_WIFI_PIN, !digitalRead(LED_WIFI_PIN));
     attempts++;
   }
   Serial.println();
@@ -104,8 +104,6 @@ float readUltrasonicCm() {
   return duration * 0.0343 / 2.0;
 }
 
-float readBatteryVoltage() { return -1; }
-
 void pushSensorData() {
   float humidity = dht.readHumidity();
   float temperature = dht.readTemperature();
@@ -121,7 +119,8 @@ void pushSensorData() {
   if (distance > 0)        doc["distance_cm"] = distance;
   if (gps.location.isValid()) { doc["latitude"] = lat; doc["longitude"] = lng; }
   String payload; serializeJson(doc, payload);
-  httpPost(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload);
+  String url = String(SUPABASE_URL) + "/rest/v1/sensor_data";
+  httpPost(url, payload, false);
 }
 
 void pushRobotStatus() {
@@ -129,7 +128,8 @@ void pushRobotStatus() {
   doc["robot_id"] = ROBOT_ID; doc["online"] = true; doc["mode"] = currentMode;
   doc["pump_status"] = pumpStatus; doc["motor_state"] = motorState; doc["speed_value"] = speedValue;
   String payload; serializeJson(doc, payload);
-  httpPost(String(SUPABASE_URL) + "/rest/v1/robot_status?on_conflict=robot_id", payload, true);
+  String url = String(SUPABASE_URL) + "/rest/v1/robot_status?on_conflict=robot_id";
+  httpPost(url, payload, true);
 }
 
 void pollCommands() {
@@ -188,7 +188,7 @@ void turnLeft()       { digitalWrite(IN1_PIN,LOW);  digitalWrite(IN2_PIN,HIGH); 
 void turnRight()      { digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW);  digitalWrite(IN3_PIN,LOW);  digitalWrite(IN4_PIN,HIGH); applySpeed(); }
 void stopMotors()     { digitalWrite(IN1_PIN,LOW); digitalWrite(IN2_PIN,LOW); digitalWrite(IN3_PIN,LOW); digitalWrite(IN4_PIN,LOW); analogWrite(ENA_PIN,0); analogWrite(ENB_PIN,0); }
 
-void httpPost(String url, String payload, bool upsert = false) {
+void httpPost(String url, String payload, bool upsert) {
   HTTPClient http; http.begin(url);
   http.addHeader("apikey", SUPABASE_SERVICE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
