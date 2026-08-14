@@ -72,6 +72,11 @@ export default function AdminRobotPage() {
     setBusy(null);
   }
 
+  const isOnline = status?.online ?? false;
+  const isStale =
+    status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
+  const active = isOnline && !isStale;
+
   return (
     <DashboardShell title="Robot Control" subtitle="Admin" isAdmin>
       <>
@@ -99,8 +104,8 @@ export default function AdminRobotPage() {
             </span>
             <div className="flex items-center gap-2">
               <StatusBadge
-                label={status?.online ? "ONLINE" : "OFFLINE"}
-                tone={status?.online ? "success" : "muted"}
+                label={active ? "ONLINE" : "OFFLINE"}
+                tone={active ? "success" : "muted"}
               />
               <button
                 onClick={refresh}
