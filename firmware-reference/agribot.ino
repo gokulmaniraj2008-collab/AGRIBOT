@@ -31,6 +31,8 @@ const char* ROBOT_ID = "agribot-01";
 #define SERVO_PIN 15
 #define SERVO_UP_ANGLE   0
 #define SERVO_DOWN_ANGLE 90
+#define LED_WIFI_PIN 21  // red LED — WiFi status
+#define LED_PUMP_PIN 22  // red LED — pump status
 
 // ---------------- Timing ----------------
 const unsigned long SENSOR_INTERVAL_MS  = 10000;
@@ -54,13 +56,14 @@ void setup() {
   pinMode(ENA_PIN, OUTPUT); pinMode(IN1_PIN, OUTPUT); pinMode(IN2_PIN, OUTPUT);
   pinMode(ENB_PIN, OUTPUT); pinMode(IN3_PIN, OUTPUT); pinMode(IN4_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT); pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
+  pinMode(LED_WIFI_PIN, OUTPUT); pinMode(LED_PUMP_PIN, OUTPUT);
+  digitalWrite(LED_WIFI_PIN, LOW); digitalWrite(LED_PUMP_PIN, LOW);
   digitalWrite(RELAY_PIN, LOW);
   stopMotors();
   dht.begin();
   gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   probeServo.attach(SERVO_PIN);
   probeServo.write(SERVO_UP_ANGLE);
-  probeDown = false;
   connectWiFi();
 }
 
@@ -77,10 +80,19 @@ void connectWiFi() {
   Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) { delay(500); Serial.print("."); attempts++; }
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(500); Serial.print(".");
+    digitalWrite(LED_WIFI_PIN, !digitalRead(LED_WIFI_PIN)); // blink while connecting
+    attempts++;
+  }
   Serial.println();
-  if (WiFi.status() == WL_CONNECTED) { Serial.print("Connected, IP: "); Serial.println(WiFi.localIP()); }
-  else Serial.println("WiFi connect failed, will retry in loop.");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("Connected, IP: "); Serial.println(WiFi.localIP());
+    digitalWrite(LED_WIFI_PIN, HIGH);
+  } else {
+    Serial.println("WiFi connect failed, will retry in loop.");
+    digitalWrite(LED_WIFI_PIN, LOW);
+  }
 }
 
 float readUltrasonicCm() {
@@ -99,7 +111,6 @@ void pushSensorData() {
   float temperature = dht.readTemperature();
   int soilRaw = analogRead(SOIL_PIN);
   float distance = readUltrasonicCm();
-  float batteryVoltage = readBatteryVoltage();
   double lat = gps.location.isValid() ? gps.location.lat() : 0;
   double lng = gps.location.isValid() ? gps.location.lng() : 0;
 
@@ -108,77 +119,58 @@ void pushSensorData() {
   if (!isnan(temperature)) doc["temperature"] = temperature;
   if (!isnan(humidity))    doc["humidity"] = humidity;
   if (distance > 0)        doc["distance_cm"] = distance;
-  if (batteryVoltage > 0)  doc["battery_voltage"] = batteryVoltage;
   if (gps.location.isValid()) { doc["latitude"] = lat; doc["longitude"] = lng; }
-
-  String payload;
-  serializeJson(doc, payload);
+  String payload; serializeJson(doc, payload);
   httpPost(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload);
 }
 
 void pushRobotStatus() {
   StaticJsonDocument<256> doc;
-  doc["robot_id"] = ROBOT_ID;
-  doc["online"] = true;
-  doc["mode"] = currentMode;
-  doc["pump_status"] = pumpStatus;
-  doc["motor_state"] = motorState;
-  doc["speed_value"] = speedValue;
-  doc["updated_at"] = "now()";
-  String payload;
-  serializeJson(doc, payload);
+  doc["robot_id"] = ROBOT_ID; doc["online"] = true; doc["mode"] = currentMode;
+  doc["pump_status"] = pumpStatus; doc["motor_state"] = motorState; doc["speed_value"] = speedValue;
+  String payload; serializeJson(doc, payload);
   httpPost(String(SUPABASE_URL) + "/rest/v1/robot_status?on_conflict=robot_id", payload, true);
 }
 
 void pollCommands() {
   String url = String(SUPABASE_URL) + "/rest/v1/robot_commands?robot_id=eq." + ROBOT_ID +
     "&executed=eq.false&order=created_at.asc&limit=5";
-  HTTPClient http;
-  http.begin(url);
+  HTTPClient http; http.begin(url);
   http.addHeader("apikey", SUPABASE_SERVICE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
   int code = http.GET();
   if (code == 200) {
-    String response = http.getString();
     DynamicJsonDocument doc(2048);
-    if (!deserializeJson(doc, response)) {
+    if (!deserializeJson(doc, http.getString())) {
       for (JsonObject cmd : doc.as<JsonArray>()) {
-        long id = cmd["id"];
-        String command = cmd["command"].as<String>();
-        int value = cmd["value"].isNull() ? -1 : cmd["value"].as<int>();
-        executeCommand(command, value);
-        markCommandExecuted(id);
+        executeCommand(cmd["command"].as<String>(), cmd["value"].isNull() ? -1 : cmd["value"].as<int>());
+        markCommandExecuted(cmd["id"]);
       }
     }
-  } else if (code > 0) Serial.printf("Command poll failed, HTTP %d\n", code);
+  }
   http.end();
 }
 
 void markCommandExecuted(long id) {
-  String url = String(SUPABASE_URL) + "/rest/v1/robot_commands?id=eq." + String(id);
   StaticJsonDocument<128> doc;
-  doc["executed"] = true;
-  doc["executed_at"] = "now()";
-  String payload;
-  serializeJson(doc, payload);
+  doc["executed"] = true; doc["executed_at"] = "now()";
+  String payload; serializeJson(doc, payload);
   HTTPClient http;
-  http.begin(url);
+  http.begin(String(SUPABASE_URL) + "/rest/v1/robot_commands?id=eq." + String(id));
   http.addHeader("apikey", SUPABASE_SERVICE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
   http.addHeader("Content-Type", "application/json");
-  http.PATCH(payload);
-  http.end();
+  http.PATCH(payload); http.end();
 }
 
 void executeCommand(String command, int value) {
-  Serial.print("Executing: "); Serial.println(command);
   if (command == "forward")            { driveForward(); motorState = "forward"; }
   else if (command == "backward")      { driveBackward(); motorState = "backward"; }
   else if (command == "left")          { turnLeft(); motorState = "left"; }
   else if (command == "right")         { turnRight(); motorState = "right"; }
   else if (command == "stop")          { stopMotors(); motorState = "stopped"; }
-  else if (command == "pump_on")       { digitalWrite(RELAY_PIN, HIGH); pumpStatus = true; }
-  else if (command == "pump_off")      { digitalWrite(RELAY_PIN, LOW); pumpStatus = false; }
+  else if (command == "pump_on")       { digitalWrite(RELAY_PIN, HIGH); digitalWrite(LED_PUMP_PIN, HIGH); pumpStatus = true; }
+  else if (command == "pump_off")      { digitalWrite(RELAY_PIN, LOW); digitalWrite(LED_PUMP_PIN, LOW); pumpStatus = false; }
   else if (command == "set_speed" && value >= 0 && value <= 255) { speedValue = value; applySpeed(); }
   else if (command == "set_mode_auto")   { currentMode = "auto"; }
   else if (command == "set_mode_manual") { currentMode = "manual"; }
@@ -190,7 +182,6 @@ void lowerProbe() { probeServo.write(SERVO_DOWN_ANGLE); probeDown = true; delay(
 void raiseProbe() { probeServo.write(SERVO_UP_ANGLE); probeDown = false; delay(700); }
 
 void applySpeed() { analogWrite(ENA_PIN, speedValue); analogWrite(ENB_PIN, speedValue); }
-
 void driveForward()  { digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW);  digitalWrite(IN3_PIN,HIGH); digitalWrite(IN4_PIN,LOW);  applySpeed(); }
 void driveBackward() { digitalWrite(IN1_PIN,LOW);  digitalWrite(IN2_PIN,HIGH); digitalWrite(IN3_PIN,LOW);  digitalWrite(IN4_PIN,HIGH); applySpeed(); }
 void turnLeft()       { digitalWrite(IN1_PIN,LOW);  digitalWrite(IN2_PIN,HIGH); digitalWrite(IN3_PIN,HIGH); digitalWrite(IN4_PIN,LOW);  applySpeed(); }
@@ -198,14 +189,10 @@ void turnRight()      { digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW);  
 void stopMotors()     { digitalWrite(IN1_PIN,LOW); digitalWrite(IN2_PIN,LOW); digitalWrite(IN3_PIN,LOW); digitalWrite(IN4_PIN,LOW); analogWrite(ENA_PIN,0); analogWrite(ENB_PIN,0); }
 
 void httpPost(String url, String payload, bool upsert = false) {
-  HTTPClient http;
-  http.begin(url);
+  HTTPClient http; http.begin(url);
   http.addHeader("apikey", SUPABASE_SERVICE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
   http.addHeader("Content-Type", "application/json");
   if (upsert) http.addHeader("Prefer", "resolution=merge-duplicates");
-  int code = http.POST(payload);
-  if (code < 0) Serial.printf("POST failed: %s\n", http.errorToString(code).c_str());
-  else if (code >= 300) Serial.printf("POST %s -> HTTP %d: %s\n", url.c_str(), code, http.getString().c_str());
-  http.end();
+  http.POST(payload); http.end();
 }
