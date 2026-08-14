@@ -3,10 +3,15 @@
   Supabase connectivity + sensor/status/command sync.
 
   SECURITY:
-  Do NOT put a Supabase service_role key in this file or commit it to GitHub.
-  Use the anon/publishable key only if your database RLS policies permit the
-  device operations, or preferably put device authentication behind a secure
-  server/Edge Function. The old exposed service_role key must be rotated.
+  This device writes using the Supabase service_role key, which bypasses
+  Row Level Security entirely — required because sensor_data/robot_status
+  have no anon/authenticated write policies (see supabase/migrations/0001_init.sql).
+  The service_role key is a master key for your whole project:
+    - NEVER commit it to GitHub or any repo. This .ino file with a real key
+      filled in should stay local only, or be split into a separate
+      secrets.h that's listed in .gitignore.
+    - If a key was ever pushed to a public repo, rotate it immediately in
+      Supabase → Settings → API before reusing this device.
 
   Current wiring map:
     L298N ENA=14, IN1=27, IN2=26, IN3=25, IN4=33, ENB=32
@@ -31,12 +36,13 @@
 #include <TinyGPSPlus.h>
 #include <ESP32Servo.h>
 
-const char* WIFI_SSID = "YOUR_WIFI_NAME";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "AGRIBOT_WIFI";
+const char* WIFI_PASSWORD = "12345678";
 
 const char* SUPABASE_URL = "https://hvnasippwadzygnaodpp.supabase.co";
-// Use a publishable/anon key only. Never commit a service_role key.
-const char* SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
+// service_role key — bypasses RLS. Keep this device-only, never in a repo.
+// Rotate in Supabase if it was ever exposed. Supabase → Settings → API → service_role.
+const char* SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8";
 const char* ROBOT_ID = "agribot-01";
 
 #define ENA_PIN 14
