@@ -16,6 +16,10 @@ const char* WIFI_PASSWORD = "12345678";
 const char* SUPABASE_URL = "https://hvnasippwadzygnaodpp.supabase.co";
 const char* SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8";
 const char* ROBOT_ID = "agribot-01";
+// Display name shown on the /devices page. To add a second physical
+// unit, flash it with a different ROBOT_ID and ROBOT_NAME below —
+// each unique robot_id becomes its own row/card on that page.
+const char* ROBOT_NAME = "AgriBot 01";
 
 #define ENA_PIN 14
 #define IN1_PIN 27
@@ -106,6 +110,7 @@ void pushRobotStatus() {
   if (WiFi.status() != WL_CONNECTED) return;
   StaticJsonDocument<256> doc;
   doc["robot_id"] = ROBOT_ID;
+  doc["name"] = ROBOT_NAME;
   doc["online"] = true;
   doc["mode"] = currentMode;
   doc["pump_status"] = pumpStatus;
@@ -126,7 +131,6 @@ float readUltrasonicCm() {
 }
 
 int readSoilRaw() {
-  // Average multiple samples to remove ADC noise.
   long total = 0;
   const int samples = 15;
   for (int i = 0; i < samples; i++) {
@@ -182,14 +186,12 @@ void pushSensorData() {
   String payload; serializeJson(doc, payload);
   postJson(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload, false);
 
-  // Example: send a one-off message up when battery gets low.
-  // lowBatteryWarned prevents spamming the log every 10s once it's low.
   static bool lowBatteryWarned = false;
   if (batteryPercent < 15.0f && !lowBatteryWarned) {
     pushMessage("Battery low: " + String(batteryPercent, 0) + "%. Consider recharging soon.", "warning");
     lowBatteryWarned = true;
   } else if (batteryPercent > 25.0f) {
-    lowBatteryWarned = false; // reset once it's charged back up
+    lowBatteryWarned = false;
   }
 }
 
@@ -256,7 +258,6 @@ void pollCommands() {
 
 // ---- Two-way messages (device_messages table) ----------------------
 
-// Send a message UP to the website. level = "info"|"warning"|"error"|"success"
 void pushMessage(const String& message, const String& level) {
   if (WiFi.status() != WL_CONNECTED) return;
   StaticJsonDocument<384> doc;
@@ -269,8 +270,6 @@ void pushMessage(const String& message, const String& level) {
   postJson(url, payload, false);
 }
 
-// Poll for messages sent DOWN from the website (origin = 'website'),
-// print them to Serial, and mark them read. Same pattern as pollCommands().
 void pollIncomingMessages() {
   if (WiFi.status() != WL_CONNECTED) return;
   String url = String(SUPABASE_URL) + "/rest/v1/device_messages?robot_id=eq." + ROBOT_ID
