@@ -19,25 +19,13 @@ const SECTIONS = [
     href: "/admin/robot",
     icon: Power,
     title: "Robot Control",
-    desc: "Status, force stop & reset",
+    desc: "Status, sensor data & recent commands",
   },
   {
     href: "/admin/videos",
     icon: Film,
     title: "Home Page Videos",
     desc: "Upload & manage dashboard videos",
-  },
-  {
-    href: "/admin/commands",
-    icon: ListChecks,
-    title: "Recent Commands",
-    desc: "Command history & pending queue",
-  },
-  {
-    href: "/admin/sensors",
-    icon: Database,
-    title: "Sensor Data",
-    desc: "Readings table & clear data",
   },
   {
     href: "/admin/users",
@@ -117,4 +105,4 @@ export default function AdminPage() {
       </>
     </DashboardShell>
   );
-}
+      }
