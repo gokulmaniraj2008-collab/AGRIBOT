@@ -356,29 +356,6 @@ export default function RobotClient({
             </button>
           </div>
         </section>
-
-        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.irrigation)}>
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground dark:text-gray-100">Irrigation Control</span>
-            <span className="text-xs text-muted dark:text-gray-400">
-              Threshold {status?.irrigation_threshold ?? "—"}%
-            </span>
-          </div>
-          <ToggleButton
-            icon={<Droplet className="h-3.5 w-3.5" />}
-            label="Auto Irrigation"
-            on={status?.irrigation_auto ?? false}
-            color={SECTION_TINTS.irrigation}
-            onClick={() =>
-              sendCommand(status?.irrigation_auto ? "set_irrigation_auto_off" : "set_irrigation_auto_on")
-            }
-            disabled={sending === "set_irrigation_auto_on" || sending === "set_irrigation_auto_off"}
-            full
-          />
-          <p className="mt-2 text-xs text-muted dark:text-gray-400">
-            When enabled, the robot waters automatically once soil moisture drops below the threshold.
-          </p>
-        </section>
       </>
     </DashboardShell>
   );
@@ -468,4 +445,5 @@ function DirButton({
     </button>
   );
         }
-                
+
+    
