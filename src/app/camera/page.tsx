@@ -113,7 +113,7 @@ export default function CameraPage() {
             Upload or take a photo of a plant for a real AI health check — no live camera required.
           </p>
           <Link
-            href="/recommendations"
+            href="/assistant?tab=recommendations"
             className="mt-3 inline-flex items-center gap-1 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold transition hover:bg-white/25"
           >
             Go to AI Plant Analysis
@@ -135,4 +135,4 @@ function DisabledAction({ icon: Icon, label }: { icon: React.ElementType; label:
       {label}
     </button>
   );
-    }
+}
