@@ -14,6 +14,7 @@ const BOTTOM_NAV_ITEMS = [
   { href: "/field", label: "Farm", icon: Map },
   { href: "/robot", label: "Robot", icon: Bot },
   { href: "/assistant", label: "AI", icon: Sparkles },
+  { href: "/profile", label: "Profile", icon: User },
 ];
 
 export function DashboardShell({
@@ -80,17 +81,6 @@ export function DashboardShell({
               >
                 <Bell className="h-4 w-4" />
               </Link>
-              <Link
-                href="/profile"
-                className={`rounded-lg p-2 transition ${
-                  pathname === "/profile"
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
-                }`}
-                aria-label="Profile"
-              >
-                <User className="h-4 w-4" />
-              </Link>
               <button
                 onClick={toggleTheme}
                 className="rounded-lg p-2 text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
@@ -143,4 +133,4 @@ export function DashboardShell({
 
 
 
-                
+            
