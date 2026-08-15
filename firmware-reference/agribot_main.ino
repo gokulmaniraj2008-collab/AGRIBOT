@@ -168,8 +168,6 @@ void pushSensorData() {
   float batteryPercent = readBatteryPercent(batteryVoltage);
 
   StaticJsonDocument<640> doc;
-  doc["robot_id"] = ROBOT_ID;
-  doc["soil_raw"] = soilRaw;
   doc["soil_moisture"] = soilPercent;
   doc["battery_voltage"] = batteryVoltage;
   doc["battery_percent"] = batteryPercent;
