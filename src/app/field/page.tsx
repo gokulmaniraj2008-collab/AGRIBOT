@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import ComingSoon from "@/components/coming-soon";
 import type { RobotStatus, SensorReading } from "@/lib/types";
-import { Map, MapPin, Gauge, Battery, Power } from "lucide-react";
+import { Map, MapPin, Gauge, Battery, Power, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 export default function FieldPage() {
   const supabase = createClient();
@@ -41,6 +42,26 @@ export default function FieldPage() {
   return (
     <DashboardShell title="Field Map" subtitle="agribot-01">
       <>
+        <Link
+          href="/plants"
+          className="mb-4 flex items-center justify-between rounded-2xl border border-border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+        >
+          <span className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <MapPin className="h-4 w-4" />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold text-foreground dark:text-gray-100">
+                Plant Locations
+              </span>
+              <span className="block text-xs text-muted dark:text-gray-400">
+                See every saved plant spot and its soil moisture
+              </span>
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted dark:text-gray-400" />
+        </Link>
+
         {hasGps ? (
           <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div className="relative h-52 bg-gradient-to-br from-primary/15 via-primary/5 to-secondary/10">
@@ -132,4 +153,4 @@ function FieldGrid({ className }: { className?: string }) {
       ))}
     </svg>
   );
-}
+          }
