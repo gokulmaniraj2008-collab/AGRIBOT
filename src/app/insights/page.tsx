@@ -1,12 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SectionHeading, ProgressRing, StatusBadge, IconTile } from "@/components/ui-kit";
 import type { RobotStatus, SensorReading } from "@/lib/types";
 import {
   Droplets, Thermometer, Battery, Bug, Sparkles, Bot,
 } from "lucide-react";
-
-export const dynamic = "force-dynamic";
 
 type Signal = {
   icon: React.ElementType;
@@ -16,22 +17,34 @@ type Signal = {
   tone: "success" | "warning" | "danger" | "muted";
 };
 
-export default async function InsightsPage() {
-  const supabase = await createClient();
+export default function InsightsPage() {
+  const supabase = createClient();
+  const [latest, setLatest] = useState<SensorReading | null>(null);
+  const [status, setStatus] = useState<RobotStatus | null>(null);
 
-  const [{ data: latest }, { data: status }] = await Promise.all([
-    supabase
-      .from("sensor_data")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<SensorReading>(),
-    supabase
-      .from("robot_status")
-      .select("*")
-      .eq("robot_id", "agribot-01")
-      .single<RobotStatus>(),
-  ]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from("sensor_data")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<SensorReading>(),
+      supabase
+        .from("robot_status")
+        .select("*")
+        .eq("robot_id", "agribot-01")
+        .single<RobotStatus>(),
+    ]).then(([{ data: latestRow }, { data: statusRow }]) => {
+      if (cancelled) return;
+      if (latestRow) setLatest(latestRow);
+      if (statusRow) setStatus(statusRow);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   const signals: Signal[] = [];
 
