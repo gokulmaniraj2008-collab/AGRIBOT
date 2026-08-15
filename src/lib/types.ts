@@ -9,6 +9,7 @@ export type SensorReading = {
   battery_percent: number | null;
   latitude: number | null;
   longitude: number | null;
+  plant_index: number | null;
 };
 
 export type RobotStatus = {
@@ -37,7 +38,8 @@ export type RobotCommand =
   | "set_mode_manual"
   | "set_irrigation_auto_on"
   | "set_irrigation_auto_off"
-  | "set_irrigation_threshold";
+  | "set_irrigation_threshold"
+  | "patrol_row";
 
 export type Profile = {
   id: string;
