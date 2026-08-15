@@ -25,7 +25,6 @@ const NAV_SECTIONS = [
       { href: "/field", label: "Field Map", icon: Map },
       { href: "/robot", label: "Robot Control", icon: Bot },
       { href: "/device", label: "ESP32 Device", icon: Cpu },
-      { href: "/irrigation", label: "Smart Irrigation", icon: Droplet },
       { href: "/camera", label: "Camera Feed", icon: Camera },
     ],
   },
@@ -256,6 +255,7 @@ export function DashboardShell({
     </div>
   );
     }
+
 
 
 
