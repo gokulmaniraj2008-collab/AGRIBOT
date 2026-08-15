@@ -280,6 +280,7 @@ void pollCommands() {
 }
 
 void pushMessage(const String& message, const String& level) {
+  Serial.printf("[TO WEBSITE] (%s) %s\n", level.c_str(), message.c_str());
   if (WiFi.status() != WL_CONNECTED) return;
   StaticJsonDocument<384> doc;
   doc["robot_id"] = ROBOT_ID;
