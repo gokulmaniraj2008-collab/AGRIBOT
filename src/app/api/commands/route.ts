@@ -19,6 +19,7 @@ const VALID_COMMANDS: RobotCommand[] = [
   "patrol_row",
   "save_plant_location",
   "goto_plant",
+  "goto_and_water_all",
 ];
 
 export async function POST(request: NextRequest) {
@@ -124,4 +125,4 @@ function describeCommand(command: string, value: number | null): string {
       return `Sent command: ${command}${value != null ? ` (${value})` : ""}`;
   }
 }
-  
+
