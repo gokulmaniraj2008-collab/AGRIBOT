@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/lib/theme-context";
 import {
   LayoutDashboard, Map, Bot, Camera, LineChart, Sparkles, Leaf,
-  Bell, User, Shield, Menu, X, Sun, Moon, LogOut, Droplet, History, Brain, Wifi, MessageSquare,
+  Bell, User, Shield, Menu, X, Sun, Moon, LogOut, Droplet, History, Brain, Wifi, MessageSquare, Cpu,
 } from "lucide-react";
 
 const BOTTOM_NAV_ITEMS = [
@@ -24,6 +24,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/field", label: "Field Map", icon: Map },
       { href: "/robot", label: "Robot Control", icon: Bot },
+      { href: "/device", label: "ESP32 Device", icon: Cpu },
       { href: "/irrigation", label: "Smart Irrigation", icon: Droplet },
       { href: "/camera", label: "Camera Feed", icon: Camera },
       { href: "/connection", label: "Connection", icon: Wifi },
@@ -260,4 +261,4 @@ export function DashboardShell({
 
 
 
-                
+
