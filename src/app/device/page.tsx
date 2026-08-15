@@ -270,18 +270,6 @@ export default function DevicePage() {
             <Stat icon={Bot} color="#3b82f6" label="Motor" value={status?.motor_state ?? "—"} />
             <Stat icon={Zap} color="#16a34a" label="Pump" value={status?.pump_status ? "ON" : "OFF"} />
             <Stat icon={Gauge} color="#8b5cf6" label="Speed" value={status?.speed_value ?? "—"} />
-            <Stat
-              icon={Droplet}
-              color="#0ea5e9"
-              label="Irrigation Auto"
-              value={status?.irrigation_auto ? "ON" : "OFF"}
-            />
-            <Stat
-              icon={Droplet}
-              color="#0284c7"
-              label="Irrig. Threshold"
-              value={status?.irrigation_threshold != null ? `${status.irrigation_threshold}%` : "—"}
-            />
           </Card>
         </div>
 
@@ -416,4 +404,5 @@ export default function DevicePage() {
       </>
     </DashboardShell>
   );
-}
+              }
+        
