@@ -12,6 +12,10 @@ import {
   RefreshCw,
   Clock,
   Thermometer,
+  Droplets,
+  Sprout,
+  Radar,
+  BatteryMedium,
   MapPin,
   Camera,
   Cpu,
@@ -360,14 +364,77 @@ export default function DevicesPage() {
                     </div>
                   </Card>
 
-                  {/* Sensor Board — its own card, separate from the controller */}
+                  {/* Each sensor gets its own card — a "Connected" badge only means
+                      the ESP32 posted a fresh row with a value for that field, not
+                      that a real sensor is wired. Values with no reading show "—". */}
                   <DeviceCard
                     icon={Thermometer}
-                    color="#f59e0b"
-                    title="Sensor Board"
-                    subtitle={`${d.robot_id} · soil, temp, humidity, ultrasonic, battery`}
-                    online={sensorConnected}
-                    agoLabel={`Last reading ${timeAgo(latest?.created_at, now)}`}
+                    color="#f97316"
+                    title="Temperature"
+                    subtitle={d.robot_id}
+                    online={sensorConnected && latest?.temperature != null}
+                    agoLabel={
+                      latest?.temperature != null
+                        ? `Last reading ${timeAgo(latest?.created_at, now)}`
+                        : "No reading yet"
+                    }
+                    detail={latest?.temperature != null ? `${latest.temperature.toFixed(1)}°C` : undefined}
+                  />
+                  <DeviceCard
+                    icon={Droplets}
+                    color="#0ea5e9"
+                    title="Humidity"
+                    subtitle={d.robot_id}
+                    online={sensorConnected && latest?.humidity != null}
+                    agoLabel={
+                      latest?.humidity != null
+                        ? `Last reading ${timeAgo(latest?.created_at, now)}`
+                        : "No reading yet"
+                    }
+                    detail={latest?.humidity != null ? `${latest.humidity.toFixed(0)}%` : undefined}
+                  />
+                  <DeviceCard
+                    icon={Sprout}
+                    color="#16a34a"
+                    title="Soil Moisture"
+                    subtitle={d.robot_id}
+                    online={sensorConnected && latest?.soil_moisture != null}
+                    agoLabel={
+                      latest?.soil_moisture != null
+                        ? `Last reading ${timeAgo(latest?.created_at, now)}`
+                        : "No reading yet"
+                    }
+                    detail={latest?.soil_moisture != null ? `${latest.soil_moisture.toFixed(0)}%` : undefined}
+                  />
+                  <DeviceCard
+                    icon={Radar}
+                    color="#a855f7"
+                    title="Ultrasonic"
+                    subtitle={d.robot_id}
+                    online={sensorConnected && latest?.distance_cm != null}
+                    agoLabel={
+                      latest?.distance_cm != null
+                        ? `Last reading ${timeAgo(latest?.created_at, now)}`
+                        : "No reading yet"
+                    }
+                    detail={latest?.distance_cm != null ? `${latest.distance_cm.toFixed(0)} cm` : undefined}
+                  />
+                  <DeviceCard
+                    icon={BatteryMedium}
+                    color="#ef4444"
+                    title="Battery"
+                    subtitle={d.robot_id}
+                    online={sensorConnected && latest?.battery_voltage != null}
+                    agoLabel={
+                      latest?.battery_voltage != null
+                        ? `Last reading ${timeAgo(latest?.created_at, now)}`
+                        : "No reading yet"
+                    }
+                    detail={
+                      latest?.battery_voltage != null
+                        ? `${latest.battery_voltage.toFixed(1)}V (${latest.battery_percent?.toFixed(0) ?? "—"}%)`
+                        : undefined
+                    }
                   />
                 </div>
               );
@@ -379,4 +446,4 @@ export default function DevicesPage() {
   );
     }
 
-    
+        
