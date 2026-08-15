@@ -25,8 +25,8 @@ import {
 
 const MORE_LINKS = [
   { href: "/analytics", label: "Monitoring", desc: "Live sensor charts & history", icon: LineChart },
-  { href: "/insights", label: "AI Insights", desc: "Farm health signals from AI", icon: Brain },
-  { href: "/recommendations", label: "Recommendations", desc: "AI-suggested actions", icon: Leaf },
+  { href: "/assistant?tab=insights", label: "AI Insights", desc: "Farm health signals from AI", icon: Brain },
+  { href: "/assistant?tab=recommendations", label: "Recommendations", desc: "AI-suggested actions", icon: Leaf },
   { href: "/device", label: "ESP32 Device", desc: "Hardware status & config", icon: Cpu },
   { href: "/camera", label: "Camera Feed", desc: "Live ESP32-CAM view", icon: Camera },
   { href: "/history", label: "Robot History", desc: "Past commands & activity", icon: History },
@@ -243,4 +243,4 @@ export default function ProfilePage() {
       </>
     </DashboardShell>
   );
-        }
+          }
