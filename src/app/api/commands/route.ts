@@ -67,5 +67,51 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Mirror the command into the message log so "Recent Commands" and
+  // "Message Log" stay in sync. Best-effort: a failure here shouldn't
+  // fail the command itself.
+  const { error: msgError } = await supabase.from("device_messages").insert({
+    robot_id,
+    origin: "website",
+    level: "info",
+    message: describeCommand(command, value),
+  });
+  if (msgError) {
+    console.error("Failed to log device message for command:", msgError.message);
+  }
+
   return NextResponse.json({ success: true, command: data });
 }
+
+function describeCommand(command: string, value: number | null): string {
+  switch (command) {
+    case "forward":
+      return "Sent command: move forward";
+    case "backward":
+      return "Sent command: move backward";
+    case "left":
+      return "Sent command: turn left";
+    case "right":
+      return "Sent command: turn right";
+    case "stop":
+      return "Sent command: stop";
+    case "pump_on":
+      return "Sent command: turn pump ON";
+    case "pump_off":
+      return "Sent command: turn pump OFF";
+    case "set_speed":
+      return `Sent command: set speed to ${value ?? "?"}`;
+    case "set_mode_auto":
+      return "Sent command: switch to auto mode";
+    case "set_mode_manual":
+      return "Sent command: switch to manual mode";
+    case "set_irrigation_auto_on":
+      return "Sent command: enable auto irrigation";
+    case "set_irrigation_auto_off":
+      return "Sent command: disable auto irrigation";
+    case "set_irrigation_threshold":
+      return `Sent command: set irrigation threshold to ${value ?? "?"}`;
+    default:
+      return `Sent command: ${command}${value != null ? ` (${value})` : ""}`;
+  }
+      }
