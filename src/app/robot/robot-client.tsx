@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { RobotStatus, SensorReading } from "@/lib/types";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -171,6 +172,23 @@ export default function RobotClient({
   // request on every pixel of slider movement.
   const [speedDraft, setSpeedDraft] = useState<number | null>(null);
   const [patrolCount, setPatrolCount] = useState(5);
+  const [saveIndex, setSaveIndex] = useState(1);
+  const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
+
+  const saveLocation = useCallback(async () => {
+    setSending("save_plant_location");
+    setSavedFeedback(null);
+    try {
+      await fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "save_plant_location", value: saveIndex }),
+      });
+      setSavedFeedback(`Saved plant ${saveIndex} — check Plant Locations map once the robot confirms.`);
+    } finally {
+      setSending(null);
+    }
+  }, [saveIndex]);
   const displayedSpeed = speedDraft ?? status?.speed_value ?? 200;
 
   useEffect(() => {
@@ -474,6 +492,45 @@ export default function RobotClient({
               {sending === "patrol_row" ? "Starting…" : "Start Patrol"}
             </button>
           </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.irrigation)}>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground dark:text-gray-100">
+              <MapPin className="h-4 w-4" style={{ color: SECTION_TINTS.irrigation }} />
+              Plant Locations
+            </span>
+            <Link href="/plants" className="text-xs font-semibold" style={{ color: SECTION_TINTS.irrigation }}>
+              View map
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-muted dark:text-gray-400">
+            Stand the robot at a plant, then save its GPS fix as that plant&apos;s number. Re-saving the
+            same number overwrites its old spot.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={saveIndex}
+              onChange={(e) => setSaveIndex(Math.max(1, Number(e.target.value) || 1))}
+              className="w-20 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-foreground dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+              aria-label="Plant number"
+            />
+            <span className="text-xs text-muted dark:text-gray-400">plant #</span>
+            <button
+              onClick={saveLocation}
+              disabled={sending === "save_plant_location"}
+              className="ml-auto rounded-full px-4 py-1.5 text-xs font-medium text-white shadow-sm transition disabled:opacity-60"
+              style={{ backgroundColor: SECTION_TINTS.irrigation }}
+            >
+              {sending === "save_plant_location" ? "Saving…" : "Save Location"}
+            </button>
+          </div>
+          {savedFeedback && (
+            <p className="mt-2 text-xs text-primary">{savedFeedback}</p>
+          )}
         </section>
       </>
     </DashboardShell>
