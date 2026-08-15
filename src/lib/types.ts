@@ -39,7 +39,9 @@ export type RobotCommand =
   | "set_irrigation_auto_on"
   | "set_irrigation_auto_off"
   | "set_irrigation_threshold"
-  | "patrol_row";
+  | "patrol_row"
+  | "save_plant_location"
+  | "goto_plant";
 
 export type Profile = {
   id: string;
