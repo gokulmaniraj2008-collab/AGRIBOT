@@ -11,6 +11,7 @@ import {
   ListChecks,
   Database,
   Users,
+  MessageSquare,
   ChevronRight,
 } from "lucide-react";
 
@@ -20,6 +21,12 @@ const SECTIONS = [
     icon: Power,
     title: "Robot Control",
     desc: "Status, sensor data & recent commands",
+  },
+  {
+    href: "/admin/messages",
+    icon: MessageSquare,
+    title: "Device Messages",
+    desc: "View & delete all robot/website messages",
   },
   {
     href: "/admin/videos",
@@ -105,4 +112,5 @@ export default function AdminPage() {
       </>
     </DashboardShell>
   );
-      }
+     }
+      
