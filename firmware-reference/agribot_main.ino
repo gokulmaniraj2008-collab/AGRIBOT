@@ -40,7 +40,6 @@ const char* ROBOT_NAME = "AgriBot 01";
 const int SOIL_DRY_RAW = 3200;
 const int SOIL_WET_RAW = 800;
 
-// NEW: floating-pin guards
 const int SOIL_FLOATING_FLOOR_RAW = 50;
 const float BATTERY_FLOATING_FLOOR_V = 1.0f;
 
@@ -138,7 +137,6 @@ int readSoilRaw() {
   return (int)(total / samples);
 }
 
-// UPDATED: returns NAN when the pin looks unwired
 float readSoilPercent(int& outRaw) {
   outRaw = readSoilRaw();
   if (outRaw < SOIL_FLOATING_FLOOR_RAW) {
@@ -151,7 +149,6 @@ float readSoilPercent(int& outRaw) {
   return (float)percent;
 }
 
-// UPDATED: returns NAN when the divider pin looks unwired
 float readBatteryPercent(float& outVoltage) {
   int raw = analogRead(BATTERY_PIN);
   float pinVoltage = (raw / ADC_MAX_COUNTS) * ADC_REF_V;
@@ -165,7 +162,6 @@ float readBatteryPercent(float& outVoltage) {
   return constrain(percent, 0.0f, 100.0f);
 }
 
-// UPDATED: only sends soil/battery fields when they're real readings
 void pushSensorData() {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -240,6 +236,22 @@ void executeCommand(const String& command, int value) {
     currentMode="manual";
   }
   applySpeed();
+
+  // Push a real confirmation back to the Message Log so the app knows
+  // the actual resulting state, not just that a command was sent.
+  if (command == "pump_on") {
+    pushMessage("Pump turned ON", "success");
+  } else if (command == "pump_off") {
+    pushMessage("Pump turned OFF", "success");
+  } else if (command == "forward" || command == "backward" || command == "left" || command == "right") {
+    pushMessage("Motor running: " + motorState, "success");
+  } else if (command == "stop") {
+    pushMessage("Motor stopped", "success");
+  } else if (command == "set_speed") {
+    pushMessage("Speed set to " + String(speedValue), "success");
+  } else if (command == "set_mode_auto" || command == "set_mode_manual") {
+    pushMessage("Mode switched to " + currentMode, "success");
+  }
 }
 
 void markCommandExecuted(long id) {
