@@ -117,4 +117,4 @@ function describeCommand(command: string, value: number | null): string {
     default:
       return `Sent command: ${command}${value != null ? ` (${value})` : ""}`;
   }
-      }
+}
