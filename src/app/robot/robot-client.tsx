@@ -46,6 +46,12 @@ export default function RobotClient({
   const [status, setStatus] = useState<RobotStatus | null>(initialStatus);
   const [latest, setLatest] = useState<SensorReading | null>(initialLatest);
   const [sending, setSending] = useState<string | null>(null);
+  // Optimistic mode: flips the button instantly on tap so it doesn't feel
+  // laggy. Cleared as soon as the real status row confirms the switch, or
+  // after a timeout if the robot never confirms (e.g. it's offline).
+  const [optimisticMode, setOptimisticMode] = useState<"manual" | "auto" | null>(null);
+  // Same idea for the water pump toggle.
+  const [optimisticPump, setOptimisticPump] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +123,48 @@ export default function RobotClient({
       setSending(null);
     }
   }, []);
+
+  const setMode = useCallback(
+    (mode: "manual" | "auto") => {
+      setOptimisticMode(mode);
+      sendCommand(mode === "auto" ? "set_mode_auto" : "set_mode_manual");
+    },
+    [sendCommand]
+  );
+
+  // Clear the optimistic override once the real status catches up, or after
+  // 8s if it never does (robot offline / command never executed).
+  useEffect(() => {
+    if (!optimisticMode) return;
+    if (status?.mode === optimisticMode) {
+      setOptimisticMode(null);
+      return;
+    }
+    const timeout = setTimeout(() => setOptimisticMode(null), 8000);
+    return () => clearTimeout(timeout);
+  }, [optimisticMode, status?.mode]);
+
+  const displayedMode = optimisticMode ?? status?.mode ?? "manual";
+
+  const setPump = useCallback(
+    (on: boolean) => {
+      setOptimisticPump(on);
+      sendCommand(on ? "pump_on" : "pump_off");
+    },
+    [sendCommand]
+  );
+
+  useEffect(() => {
+    if (optimisticPump === null) return;
+    if ((status?.pump_status ?? false) === optimisticPump) {
+      setOptimisticPump(null);
+      return;
+    }
+    const timeout = setTimeout(() => setOptimisticPump(null), 8000);
+    return () => clearTimeout(timeout);
+  }, [optimisticPump, status?.pump_status]);
+
+  const displayedPump = optimisticPump ?? status?.pump_status ?? false;
 
   const isOnline = status?.online ?? false;
   const isStale =
@@ -233,10 +281,10 @@ export default function RobotClient({
           </div>
           <div className="grid grid-cols-4 gap-2">
             <button
-              onClick={() => sendCommand("set_mode_manual")}
+              onClick={() => setMode("manual")}
               disabled={sending === "set_mode_manual"}
               className={`rounded-xl py-2.5 text-xs font-medium shadow-sm transition ${
-                status?.mode === "manual"
+                displayedMode === "manual"
                   ? "bg-primary text-white"
                   : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
               }`}
@@ -244,10 +292,10 @@ export default function RobotClient({
               Manual
             </button>
             <button
-              onClick={() => sendCommand("set_mode_auto")}
+              onClick={() => setMode("auto")}
               disabled={sending === "set_mode_auto"}
               className={`rounded-xl py-2.5 text-xs font-medium shadow-sm transition ${
-                status?.mode === "auto"
+                displayedMode === "auto"
                   ? "bg-primary text-white"
                   : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
               }`}
@@ -323,15 +371,6 @@ export default function RobotClient({
               Switch to Manual mode to drive the robot directly.
             </p>
           )}
-
-          {/* Emergency stop works regardless of mode — same "stop" command, always enabled */}
-          <button
-            onClick={() => sendCommand("stop")}
-            disabled={sending === "stop"}
-            className="mt-4 w-full rounded-xl bg-danger py-3 text-sm font-bold tracking-wide text-white shadow-sm shadow-danger/30 transition hover:bg-red-600 active:scale-[0.98] disabled:opacity-60"
-          >
-            EMERGENCY STOP
-          </button>
         </section>
 
         <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.pump)}>
@@ -341,18 +380,16 @@ export default function RobotClient({
               Water Pump
             </span>
             <button
-              onClick={() =>
-                sendCommand(status?.pump_status ? "pump_off" : "pump_on")
-              }
+              onClick={() => setPump(!displayedPump)}
               disabled={sending === "pump_on" || sending === "pump_off"}
               className={`rounded-full px-4 py-1.5 text-xs font-medium shadow-sm transition ${
-                status?.pump_status
+                displayedPump
                   ? "text-white"
                   : "bg-white text-muted dark:bg-gray-900 dark:text-gray-400"
               }`}
-              style={status?.pump_status ? { backgroundColor: SECTION_TINTS.pump } : undefined}
+              style={displayedPump ? { backgroundColor: SECTION_TINTS.pump } : undefined}
             >
-              {status?.pump_status ? "Turn Off" : "Turn On"}
+              {displayedPump ? "Turn Off" : "Turn On"}
             </button>
           </div>
         </section>
@@ -446,4 +483,5 @@ function DirButton({
   );
         }
 
-    
+
+                                    
