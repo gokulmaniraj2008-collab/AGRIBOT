@@ -41,7 +41,17 @@ export type RobotCommand =
   | "set_irrigation_threshold"
   | "patrol_row"
   | "save_plant_location"
-  | "goto_plant";
+  | "goto_plant"
+  | "goto_and_water_all";
+
+export type PlantLocation = {
+  id: number;
+  created_at: string;
+  robot_id: string;
+  plant_index: number;
+  latitude: number;
+  longitude: number;
+};
 
 export type Profile = {
   id: string;
