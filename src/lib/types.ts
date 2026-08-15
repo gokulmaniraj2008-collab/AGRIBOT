@@ -63,6 +63,16 @@ export type RobotCommandRow = {
   executed_at: string | null;
 };
 
+export type DeviceMessage = {
+  id: number;
+  created_at: string;
+  robot_id: string;
+  origin: "esp32" | "website";
+  level: "info" | "warning" | "error" | "success";
+  message: string;
+  read: boolean;
+};
+
 export type PlantAnalysis = {
   id: number;
   created_at: string;
