@@ -55,6 +55,11 @@ const unsigned long STATUS_INTERVAL_MS = 5000;
 const unsigned long COMMAND_POLL_MS = 2000;
 const unsigned long MESSAGE_POLL_MS = 3000;
 
+// --- Patrol / plant-spacing calibration ---
+const unsigned long MS_PER_PLANT_STEP = 1500;   // start estimate, recalibrate
+const unsigned long PATROL_SETTLE_MS = 500;
+const float PATROL_OBSTACLE_STOP_CM = 15.0f;
+
 unsigned long lastSensorPush = 0;
 unsigned long lastStatusPush = 0;
 unsigned long lastCommandPoll = 0;
@@ -213,6 +218,70 @@ void applySpeed() {
   analogWrite(ENB_PIN, speedValue);
 }
 
+// Drives forward one "plant step," watching the ultrasonic sensor the
+// whole time so it can stop early if something is in the way.
+bool driveOnePlantStep() {
+  digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW);
+  digitalWrite(IN3_PIN,HIGH); digitalWrite(IN4_PIN,LOW);
+  motorState = "forward";
+  applySpeed();
+
+  unsigned long stepStart = millis();
+  bool obstacle = false;
+  while (millis() - stepStart < MS_PER_PLANT_STEP) {
+    float dist = readUltrasonicCm();
+    if (dist > 0 && dist < PATROL_OBSTACLE_STOP_CM) {
+      obstacle = true;
+      break;
+    }
+    delay(20);
+  }
+
+  stopMotors();
+  motorState = "stopped";
+  return !obstacle;
+}
+
+// Drives to each plant in a row, stopping at each one to read soil
+// moisture and push the result to Supabase.
+void patrolRow(int numPlants) {
+  if (numPlants <= 0) numPlants = 1;
+  pushMessage("Patrol started: checking " + String(numPlants) + " plant(s)", "info");
+
+  for (int plantIndex = 1; plantIndex <= numPlants; plantIndex++) {
+    bool reachedPlant = driveOnePlantStep();
+    if (!reachedPlant) {
+      pushMessage("Patrol stopped early: obstacle detected before plant " + String(plantIndex), "warning");
+      return;
+    }
+
+    delay(PATROL_SETTLE_MS);
+
+    int soilRaw = 0;
+    float soilPercent = readSoilPercent(soilRaw);
+
+    if (isnan(soilPercent)) {
+      pushMessage("Plant " + String(plantIndex) + ": soil sensor reading failed", "warning");
+    } else {
+      pushMessage("Plant " + String(plantIndex) + " soil moisture: " + String(soilPercent, 0) + "%", "success");
+
+      if (WiFi.status() == WL_CONNECTED) {
+        StaticJsonDocument<256> doc;
+        doc["soil_moisture"] = soilPercent;
+        doc["plant_index"] = plantIndex;
+        String payload; serializeJson(doc, payload);
+        postJson(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload, false);
+      }
+
+      if (soilPercent < 30.0f) {
+        pushMessage("Plant " + String(plantIndex) + " is dry (" + String(soilPercent, 0) + "%)", "warning");
+      }
+    }
+  }
+
+  pushMessage("Patrol complete: " + String(numPlants) + " plant(s) checked", "success");
+}
+
 void executeCommand(const String& command, int value) {
   if (command == "forward") {
     digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW); digitalWrite(IN3_PIN,HIGH); digitalWrite(IN4_PIN,LOW); motorState="forward";
@@ -234,11 +303,11 @@ void executeCommand(const String& command, int value) {
     currentMode="auto";
   } else if (command == "set_mode_manual") {
     currentMode="manual";
+  } else if (command == "patrol_row") {
+    patrolRow(value > 0 ? value : 1);
   }
   applySpeed();
 
-  // Push a real confirmation back to the Message Log so the app knows
-  // the actual resulting state, not just that a command was sent.
   if (command == "pump_on") {
     pushMessage("Pump turned ON", "success");
   } else if (command == "pump_off") {
