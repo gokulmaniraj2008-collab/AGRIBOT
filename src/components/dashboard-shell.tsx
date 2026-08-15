@@ -27,7 +27,6 @@ const NAV_SECTIONS = [
       { href: "/device", label: "ESP32 Device", icon: Cpu },
       { href: "/irrigation", label: "Smart Irrigation", icon: Droplet },
       { href: "/camera", label: "Camera Feed", icon: Camera },
-      { href: "/connection", label: "Connection", icon: Wifi },
     ],
   },
   {
@@ -259,6 +258,9 @@ export function DashboardShell({
     }
 
 
+
+
+       
 
 
             
