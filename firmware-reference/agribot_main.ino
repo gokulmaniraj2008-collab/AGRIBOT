@@ -14,11 +14,8 @@
 const char* WIFI_SSID = "AGRIBOT_WIFI";
 const char* WIFI_PASSWORD = "12345678";
 const char* SUPABASE_URL = "https://hvnasippwadzygnaodpp.supabase.co";
-const char* SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8";
+const char* SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8";  // your service_role key
 const char* ROBOT_ID = "agribot-01";
-// Display name shown on the /devices page. To add a second physical
-// unit, flash it with a different ROBOT_ID and ROBOT_NAME below —
-// each unique robot_id becomes its own row/card on that page.
 const char* ROBOT_NAME = "AgriBot 01";
 
 #define ENA_PIN 14
@@ -40,11 +37,12 @@ const char* ROBOT_NAME = "AgriBot 01";
 #define LED_PUMP_PIN 22
 #define BATTERY_PIN 34
 
-// Initial calibration for a typical 3.3V analog soil sensor.
-// Higher raw value = drier soil.
-// Replace these two values after checking the RAW value in dry air and wet soil.
 const int SOIL_DRY_RAW = 3200;
 const int SOIL_WET_RAW = 800;
+
+// NEW: floating-pin guards
+const int SOIL_FLOATING_FLOOR_RAW = 50;
+const float BATTERY_FLOATING_FLOOR_V = 1.0f;
 
 const float R1_OHMS = 100000.0f;
 const float R2_OHMS = 33000.0f;
@@ -140,23 +138,34 @@ int readSoilRaw() {
   return (int)(total / samples);
 }
 
+// UPDATED: returns NAN when the pin looks unwired
 float readSoilPercent(int& outRaw) {
   outRaw = readSoilRaw();
+  if (outRaw < SOIL_FLOATING_FLOOR_RAW) {
+    Serial.println("Soil sensor appears unconnected (raw near 0) - skipping reading");
+    return NAN;
+  }
   long percent = map(outRaw, SOIL_DRY_RAW, SOIL_WET_RAW, 0, 100);
   percent = constrain(percent, 0L, 100L);
   Serial.printf("Soil RAW=%d  Moisture=%ld%%\n", outRaw, percent);
   return (float)percent;
 }
 
+// UPDATED: returns NAN when the divider pin looks unwired
 float readBatteryPercent(float& outVoltage) {
   int raw = analogRead(BATTERY_PIN);
   float pinVoltage = (raw / ADC_MAX_COUNTS) * ADC_REF_V;
   float batteryVoltage = pinVoltage * (R1_OHMS + R2_OHMS) / R2_OHMS;
   outVoltage = batteryVoltage;
+  if (batteryVoltage < BATTERY_FLOATING_FLOOR_V) {
+    Serial.println("Battery sensor appears unconnected (voltage near 0) - skipping reading");
+    return NAN;
+  }
   float percent = (batteryVoltage - BATTERY_MIN_V) / (BATTERY_MAX_V - BATTERY_MIN_V) * 100.0f;
   return constrain(percent, 0.0f, 100.0f);
 }
 
+// UPDATED: only sends soil/battery fields when they're real readings
 void pushSensorData() {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -172,9 +181,11 @@ void pushSensorData() {
   float batteryPercent = readBatteryPercent(batteryVoltage);
 
   StaticJsonDocument<640> doc;
-  doc["soil_moisture"] = soilPercent;
-  doc["battery_voltage"] = batteryVoltage;
-  doc["battery_percent"] = batteryPercent;
+  if (!isnan(soilPercent)) doc["soil_moisture"] = soilPercent;
+  if (!isnan(batteryPercent)) {
+    doc["battery_voltage"] = batteryVoltage;
+    doc["battery_percent"] = batteryPercent;
+  }
   if (!isnan(temperature)) doc["temperature"] = temperature;
   if (!isnan(humidity)) doc["humidity"] = humidity;
   if (distance > 0) doc["distance_cm"] = distance;
@@ -187,10 +198,10 @@ void pushSensorData() {
   postJson(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload, false);
 
   static bool lowBatteryWarned = false;
-  if (batteryPercent < 15.0f && !lowBatteryWarned) {
+  if (!isnan(batteryPercent) && batteryPercent < 15.0f && !lowBatteryWarned) {
     pushMessage("Battery low: " + String(batteryPercent, 0) + "%. Consider recharging soon.", "warning");
     lowBatteryWarned = true;
-  } else if (batteryPercent > 25.0f) {
+  } else if (!isnan(batteryPercent) && batteryPercent > 25.0f) {
     lowBatteryWarned = false;
   }
 }
@@ -255,8 +266,6 @@ void pollCommands() {
   } else if (code >= 300) Serial.printf("Command poll HTTP %d: %s\n", code, http.getString().c_str());
   http.end();
 }
-
-// ---- Two-way messages (device_messages table) ----------------------
 
 void pushMessage(const String& message, const String& level) {
   if (WiFi.status() != WL_CONNECTED) return;
