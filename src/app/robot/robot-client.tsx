@@ -358,13 +358,19 @@ export default function RobotClient({
             max={255}
             value={displayedSpeed}
             onChange={(e) => setSpeedDraft(Number(e.target.value))}
-            className="w-full accent-sky-500"
+            disabled={displayedMode === "auto"}
+            className="w-full accent-sky-500 disabled:opacity-40"
             aria-label="Motor speed"
           />
           <div className="mt-1 flex justify-between text-[10px] text-muted dark:text-gray-400">
             <span>Slow</span>
             <span>Fast</span>
           </div>
+          {displayedMode === "auto" && (
+            <p className="mt-2 text-center text-xs text-muted dark:text-gray-400">
+              Switch to Manual mode to adjust speed.
+            </p>
+          )}
         </section>
 
         <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.control)}>
@@ -528,4 +534,4 @@ function DirButton({
         }
 
 
-              
+                
