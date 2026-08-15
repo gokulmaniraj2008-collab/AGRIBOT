@@ -78,6 +78,48 @@ function SubDeviceRow({
   );
 }
 
+/** A top-level device card — same visual weight as the main controller card,
+    used for devices that get their own row instead of being nested. */
+function DeviceCard({
+  icon: Icon,
+  color,
+  title,
+  subtitle,
+  online,
+  agoLabel,
+  detail,
+}: {
+  icon: React.ElementType;
+  color: string;
+  title: string;
+  subtitle: string;
+  online: boolean;
+  agoLabel: string;
+  detail?: string;
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2.5">
+          <IconTile icon={Icon} size={36} color={color} />
+          <span>
+            <span className="block text-sm font-semibold text-foreground dark:text-gray-100">
+              {title}
+            </span>
+            <span className="block text-[11px] text-muted dark:text-gray-400">{subtitle}</span>
+          </span>
+        </span>
+        <StatusBadge label={online ? "Connected" : "Disconnected"} tone={online ? "success" : "muted"} />
+      </div>
+      <p className="mt-2 flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
+        <Clock className="h-3 w-3" />
+        {agoLabel}
+        {detail && <span className="truncate">· {detail}</span>}
+      </p>
+    </Card>
+  );
+}
+
 export default function DevicesPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -265,64 +307,69 @@ export default function DevicesPage() {
                 !!cameraLastSeen && Date.now() - new Date(cameraLastSeen).getTime() < CAMERA_STALE_MS;
 
               return (
-                <Card key={d.robot_id} className="p-4">
-                  {/* Controller */}
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2.5">
-                      <IconTile icon={Bot} size={36} />
-                      <span>
-                        <span className="block text-sm font-semibold text-foreground dark:text-gray-100">
-                          {d.name || d.robot_id}
-                        </span>
-                        <span className="block text-[11px] text-muted dark:text-gray-400">
-                          {d.robot_id} · Main controller
+                <div key={d.robot_id} className="flex flex-col gap-3">
+                  <Card className="p-4">
+                    {/* Controller */}
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2.5">
+                        <IconTile icon={Bot} size={36} />
+                        <span>
+                          <span className="block text-sm font-semibold text-foreground dark:text-gray-100">
+                            {d.name || d.robot_id}
+                          </span>
+                          <span className="block text-[11px] text-muted dark:text-gray-400">
+                            {d.robot_id} · Main controller
+                          </span>
                         </span>
                       </span>
-                    </span>
-                    <StatusBadge
-                      label={controllerConnected ? "Connected" : "Disconnected"}
-                      tone={controllerConnected ? "success" : "muted"}
-                    />
-                  </div>
-                  <p className="mt-2 flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
-                    <Clock className="h-3 w-3" />
-                    Last heartbeat {timeAgo(d.updated_at, now)} · Mode {d.mode}
-                  </p>
+                      <StatusBadge
+                        label={controllerConnected ? "Connected" : "Disconnected"}
+                        tone={controllerConnected ? "success" : "muted"}
+                      />
+                    </div>
+                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
+                      <Clock className="h-3 w-3" />
+                      Last heartbeat {timeAgo(d.updated_at, now)} · Mode {d.mode}
+                    </p>
 
-                  {/* Attached devices */}
-                  <div className="mt-3 divide-y divide-border border-t border-border pt-1 dark:divide-gray-800 dark:border-gray-800">
-                    <SubDeviceRow
-                      icon={Thermometer}
-                      color="#f59e0b"
-                      title="Sensor Board (soil, temp, humidity, ultrasonic, battery)"
-                      online={sensorConnected}
-                      agoLabel={timeAgo(latest?.created_at, now)}
-                    />
-                    <SubDeviceRow
-                      icon={MapPin}
-                      color="#0ea5e9"
-                      title="GPS Module"
-                      online={gpsConnected}
-                      agoLabel={timeAgo(latest?.created_at, now)}
-                      detail={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "no fix"}
-                    />
-                    <SubDeviceRow
-                      icon={Camera}
-                      color="#8b5cf6"
-                      title="Camera (ESP32-CAM)"
-                      online={cameraConnected}
-                      agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
-                    />
-                    <SubDeviceRow
-                      icon={Cpu}
-                      color="#16a34a"
-                      title="Motor / Pump Controller"
-                      online={controllerConnected}
-                      agoLabel={timeAgo(d.updated_at, now)}
-                      detail={`pump ${d.pump_status ? "on" : "off"} · motor ${d.motor_state}`}
-                    />
-                  </div>
-                </Card>
+                    {/* Attached devices */}
+                    <div className="mt-3 divide-y divide-border border-t border-border pt-1 dark:divide-gray-800 dark:border-gray-800">
+                      <SubDeviceRow
+                        icon={MapPin}
+                        color="#0ea5e9"
+                        title="GPS Module"
+                        online={gpsConnected}
+                        agoLabel={timeAgo(latest?.created_at, now)}
+                        detail={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "no fix"}
+                      />
+                      <SubDeviceRow
+                        icon={Camera}
+                        color="#8b5cf6"
+                        title="Camera (ESP32-CAM)"
+                        online={cameraConnected}
+                        agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
+                      />
+                      <SubDeviceRow
+                        icon={Cpu}
+                        color="#16a34a"
+                        title="Motor / Pump Controller"
+                        online={controllerConnected}
+                        agoLabel={timeAgo(d.updated_at, now)}
+                        detail={`pump ${d.pump_status ? "on" : "off"} · motor ${d.motor_state}`}
+                      />
+                    </div>
+                  </Card>
+
+                  {/* Sensor Board — its own card, separate from the controller */}
+                  <DeviceCard
+                    icon={Thermometer}
+                    color="#f59e0b"
+                    title="Sensor Board"
+                    subtitle={`${d.robot_id} · soil, temp, humidity, ultrasonic, battery`}
+                    online={sensorConnected}
+                    agoLabel={`Last reading ${timeAgo(latest?.created_at, now)}`}
+                  />
+                </div>
               );
             })}
           </div>
@@ -331,4 +378,5 @@ export default function DevicesPage() {
     </DashboardShell>
   );
     }
+
     
