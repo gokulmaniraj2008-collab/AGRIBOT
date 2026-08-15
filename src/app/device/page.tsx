@@ -330,5 +330,5 @@ export default function DevicesPage() {
       </>
     </DashboardShell>
   );
-              }
-                
+            }
+                      
