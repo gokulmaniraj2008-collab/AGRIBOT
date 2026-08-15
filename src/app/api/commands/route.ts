@@ -16,6 +16,7 @@ const VALID_COMMANDS: RobotCommand[] = [
   "set_irrigation_auto_on",
   "set_irrigation_auto_off",
   "set_irrigation_threshold",
+  "patrol_row",
 ];
 
 export async function POST(request: NextRequest) {
@@ -111,6 +112,8 @@ function describeCommand(command: string, value: number | null): string {
       return "Sent command: disable auto irrigation";
     case "set_irrigation_threshold":
       return `Sent command: set irrigation threshold to ${value ?? "?"}`;
+    case "patrol_row":
+      return `Sent command: patrol and check ${value ?? "?"} plant(s)`;
     default:
       return `Sent command: ${command}${value != null ? ` (${value})` : ""}`;
   }
