@@ -166,6 +166,27 @@ export default function RobotClient({
 
   const displayedPump = optimisticPump ?? status?.pump_status ?? false;
 
+  // Speed control: local value updates instantly while dragging; the actual
+  // set_speed command is debounced so we don't flood the queue with a
+  // request on every pixel of slider movement.
+  const [speedDraft, setSpeedDraft] = useState<number | null>(null);
+  const displayedSpeed = speedDraft ?? status?.speed_value ?? 200;
+
+  useEffect(() => {
+    if (speedDraft === null) return;
+    const timeout = setTimeout(() => {
+      sendCommand("set_speed", speedDraft);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [speedDraft, sendCommand]);
+
+  // Clear the draft once the real status catches up, so future firmware
+  // pushes aren't masked forever by a stale local value.
+  useEffect(() => {
+    if (speedDraft === null) return;
+    if (status?.speed_value === speedDraft) setSpeedDraft(null);
+  }, [speedDraft, status?.speed_value]);
+
   const isOnline = status?.online ?? false;
   const isStale =
     status?.updated_at &&
@@ -240,7 +261,7 @@ export default function RobotClient({
               icon={<Gauge className="h-4 w-4" />}
               color="#6366f1"
               label="Speed setpoint"
-              value={status ? `${status.speed_value}` : "—"}
+              value={status ? `${displayedSpeed}` : "—"}
             />
             <InfoRow
               icon={<Radar className="h-4 w-4" />}
@@ -320,6 +341,29 @@ export default function RobotClient({
               <Home className="h-3.5 w-3.5" />
               Home
             </button>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.control)}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground dark:text-gray-100">Speed</span>
+            <span className="text-sm font-semibold text-foreground dark:text-gray-100">
+              {displayedSpeed}
+              <span className="text-xs font-normal text-muted dark:text-gray-400"> / 255</span>
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={255}
+            value={displayedSpeed}
+            onChange={(e) => setSpeedDraft(Number(e.target.value))}
+            className="w-full accent-sky-500"
+            aria-label="Motor speed"
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-muted dark:text-gray-400">
+            <span>Slow</span>
+            <span>Fast</span>
           </div>
         </section>
 
@@ -484,4 +528,4 @@ function DirButton({
         }
 
 
-                                    
+              
