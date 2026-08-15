@@ -16,7 +16,21 @@ import {
   ShieldCheck,
   ChevronRight,
   Camera,
+  LineChart,
+  Brain,
+  Leaf,
+  Cpu,
+  History,
 } from "lucide-react";
+
+const MORE_LINKS = [
+  { href: "/analytics", label: "Monitoring", desc: "Live sensor charts & history", icon: LineChart },
+  { href: "/insights", label: "AI Insights", desc: "Farm health signals from AI", icon: Brain },
+  { href: "/recommendations", label: "Recommendations", desc: "AI-suggested actions", icon: Leaf },
+  { href: "/device", label: "ESP32 Device", desc: "Hardware status & config", icon: Cpu },
+  { href: "/camera", label: "Camera Feed", desc: "Live ESP32-CAM view", icon: Camera },
+  { href: "/history", label: "Robot History", desc: "Past commands & activity", icon: History },
+];
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -199,6 +213,26 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        <div className="mt-6">
+          <SectionHeading eyebrow="Explore" title="More" />
+          <div className="space-y-2.5">
+            {MORE_LINKS.map(({ href, label, desc, icon: Icon }) => (
+              <Link key={href} href={href}>
+                <Card className="flex items-center gap-3 p-3.5 transition active:scale-[0.99]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground dark:text-gray-100">{label}</p>
+                    <p className="text-xs text-muted dark:text-gray-400">{desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted" />
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+
         <button
           onClick={handleSignOut}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm font-semibold text-danger transition hover:bg-danger/10 active:scale-[0.99]"
@@ -209,4 +243,4 @@ export default function ProfilePage() {
       </>
     </DashboardShell>
   );
-                  }
+        }
