@@ -25,10 +25,15 @@ import {
   CheckCircle2,
   AlertTriangle,
   Globe,
+  Camera,
+  Clock,
 } from "lucide-react";
 
 const ROBOT_ID = "agribot-01";
 const HEARTBEAT_STALE_MS = 30_000;
+const CAMERA_BUCKET = "robot-images";
+const CAMERA_STALE_MS = 15_000;
+const CAMERA_POLL_MS = 5000;
 const TICK_MS = 1000;
 const MESSAGE_ROWS = 12;
 const COMMAND_ROWS = 8;
@@ -97,6 +102,45 @@ const LEVEL_STYLE: Record<DeviceMessage["level"], { color: string; icon: React.E
   error: { color: "#dc2626", icon: AlertTriangle },
 };
 
+/** Compact row for a single link's health — used in the Link Health card */
+function LinkRow({
+  icon: Icon,
+  color,
+  title,
+  online,
+  agoLabel,
+  detail,
+}: {
+  icon: React.ElementType;
+  color: string;
+  title: string;
+  online: boolean;
+  agoLabel: string;
+  detail?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${color}1a`, color }}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground dark:text-gray-100">{title}</p>
+          <p className="flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
+            <Clock className="h-3 w-3" />
+            {agoLabel}
+            {detail && <span className="truncate">· {detail}</span>}
+          </p>
+        </div>
+      </div>
+      <StatusBadge label={online ? "Online" : "Offline"} tone={online ? "success" : "muted"} />
+    </div>
+  );
+}
+
 export default function DevicePage() {
   const supabase = useRef(createClient()).current;
 
@@ -104,6 +148,8 @@ export default function DevicePage() {
   const [latest, setLatest] = useState<SensorReading | null>(null);
   const [messages, setMessages] = useState<DeviceMessage[]>([]);
   const [commands, setCommands] = useState<RobotCommandRow[]>([]);
+  const [cameraLastSeen, setCameraLastSeen] = useState<string | null>(null);
+  const [cameraChecked, setCameraChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   // Initial fetch — everything in parallel
@@ -216,6 +262,31 @@ export default function DevicePage() {
     };
   }, [supabase]);
 
+  // Poll Storage for the newest camera frame (camera has no realtime signal)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchLatestImage() {
+      const { data, error } = await supabase.storage.from(CAMERA_BUCKET).list("", {
+        limit: 1,
+        sortBy: { column: "created_at", order: "desc" },
+        search: ROBOT_ID,
+      });
+      if (cancelled) return;
+      setCameraChecked(true);
+      if (error || !data || data.length === 0) return;
+      const latestFile = data[0];
+      setCameraLastSeen(latestFile.created_at ?? latestFile.updated_at ?? null);
+    }
+
+    fetchLatestImage();
+    const interval = setInterval(fetchLatestImage, CAMERA_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [supabase]);
+
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(interval);
@@ -227,6 +298,12 @@ export default function DevicePage() {
     now - new Date(status.updated_at).getTime() < HEARTBEAT_STALE_MS;
 
   const hasGps = latest?.latitude != null && latest?.longitude != null;
+  const gpsOnline =
+    hasGps && !!latest?.created_at && now - new Date(latest.created_at).getTime() < HEARTBEAT_STALE_MS;
+  const sensorOnline =
+    !!latest?.created_at && now - new Date(latest.created_at).getTime() < HEARTBEAT_STALE_MS;
+  const cameraOnline =
+    !!cameraLastSeen && now - new Date(cameraLastSeen).getTime() < CAMERA_STALE_MS;
 
   return (
     <DashboardShell title="ESP32 Device" subtitle={ROBOT_ID} online={heartbeatOnline}>
@@ -259,6 +336,47 @@ export default function DevicePage() {
             <StatusBadge label={heartbeatOnline ? "Online" : "Offline"} tone={heartbeatOnline ? "success" : "muted"} />
           </div>
         </Card>
+
+        {/* Link health — per-subsystem online/offline */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Link Health
+          </p>
+          <Card className="p-3">
+            <div className="flex flex-col divide-y divide-border dark:divide-gray-800">
+              <LinkRow
+                icon={heartbeatOnline ? Wifi : WifiOff}
+                color="#16a34a"
+                title="ESP32 Heartbeat"
+                online={heartbeatOnline}
+                agoLabel={timeAgo(status?.updated_at, now)}
+                detail={status ? `mode: ${status.mode}` : undefined}
+              />
+              <LinkRow
+                icon={MapPin}
+                color="#0ea5e9"
+                title="GPS Location"
+                online={gpsOnline}
+                agoLabel={timeAgo(latest?.created_at, now)}
+                detail={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "no fix"}
+              />
+              <LinkRow
+                icon={Thermometer}
+                color="#f59e0b"
+                title="Sensors"
+                online={sensorOnline}
+                agoLabel={timeAgo(latest?.created_at, now)}
+              />
+              <LinkRow
+                icon={Camera}
+                color="#8b5cf6"
+                title="Camera (ESP32-CAM)"
+                online={cameraOnline}
+                agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
+              />
+            </div>
+          </Card>
+        </div>
 
         {/* Robot state */}
         <div className="mt-4">
@@ -404,5 +522,5 @@ export default function DevicePage() {
       </>
     </DashboardShell>
   );
-              }
-        
+      }
+                
