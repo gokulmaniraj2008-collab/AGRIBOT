@@ -9,7 +9,7 @@ import { Card, StatCard, AIBanner, SectionHeading, StatusBadge } from "@/compone
 import VideoQuickBox from "@/components/video-quick-box";
 import {
   Droplets, Thermometer, Wind, Battery, Map, Bell, Sparkles,
-  ChevronRight, LineChart as LineChartIcon, Bot, Camera,
+  ChevronRight, LineChart as LineChartIcon, Bot, Camera, Wifi,
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -222,6 +222,7 @@ export default function DashboardClient({
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <QuickLink href="/assistant" icon={Sparkles} label="Ask AI" />
           <QuickLink href="/robot" icon={Bot} label="Robot" />
+          <QuickLink href="/devices" icon={Wifi} label="Devices" />
           <QuickLink href="/camera" icon={Camera} label="Camera" />
           <QuickLink href="/field" icon={Map} label="Field Map" />
           <QuickLink href="/alerts" icon={Bell} label="Alerts" />
@@ -252,4 +253,4 @@ function QuickLink({
       <ChevronRight className="h-4 w-4 text-muted dark:text-gray-500" />
     </Link>
   );
-                  }
+      }
