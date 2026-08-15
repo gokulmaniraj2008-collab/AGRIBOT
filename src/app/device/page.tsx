@@ -1,27 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { RobotStatus, SensorReading, DeviceMessage, RobotCommandRow } from "@/lib/types";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { Card, StatusBadge, IconTile, SectionHeading } from "@/components/ui-kit";
-import type { RobotStatus, SensorReading } from "@/lib/types";
+import { Card, SectionHeading, StatusBadge } from "@/components/ui-kit";
 import {
-  Bot,
-  ArrowLeft,
-  RefreshCw,
-  Clock,
-  Thermometer,
-  MapPin,
-  Camera,
   Cpu,
+  Wifi,
+  WifiOff,
+  MapPin,
+  Thermometer,
+  Droplet,
+  Gauge,
+  Battery,
+  Radio,
+  Bot,
+  Zap,
+  Navigation,
+  Terminal,
+  MessageSquare,
+  Cog,
+  Info,
+  CheckCircle2,
+  AlertTriangle,
+  Globe,
+  Camera,
+  Clock,
 } from "lucide-react";
 
-const HEARTBEAT_STALE_MS = 30_000; // same threshold used on /robot, /admin/robot, /device
-const CAMERA_STALE_MS = 15_000;
-const CAMERA_POLL_MS = 5_000;
+const ROBOT_ID = "agribot-01";
+const HEARTBEAT_STALE_MS = 30_000;
 const CAMERA_BUCKET = "robot-images";
-const TICK_MS = 1_000;
+const CAMERA_STALE_MS = 15_000;
+const CAMERA_POLL_MS = 5000;
+const TICK_MS = 1000;
+const MESSAGE_ROWS = 12;
+const COMMAND_ROWS = 8;
 
 function timeAgo(iso: string | null | undefined, now: number): string {
   if (!iso) return "—";
@@ -39,8 +54,56 @@ function timeAgo(iso: string | null | undefined, now: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-/** One sub-device row inside a controller card (Sensors, GPS, Camera, ...) */
-function SubDeviceRow({
+function absoluteTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+/** Small labeled stat tile used in the telemetry grid */
+function Stat({
+  icon: Icon,
+  color,
+  label,
+  value,
+}: {
+  icon: React.ElementType;
+  color: string;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${color}1a`, color }}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted dark:text-gray-400">{label}</p>
+        <p className="truncate text-sm font-semibold text-foreground dark:text-gray-100">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+const LEVEL_STYLE: Record<DeviceMessage["level"], { color: string; icon: React.ElementType }> = {
+  info: { color: "#0ea5e9", icon: Info },
+  success: { color: "#16a34a", icon: CheckCircle2 },
+  warning: { color: "#f59e0b", icon: AlertTriangle },
+  error: { color: "#dc2626", icon: AlertTriangle },
+};
+
+/** Compact row for a single link's health — used in the Link Health card */
+function LinkRow({
   icon: Icon,
   color,
   title,
@@ -57,7 +120,7 @@ function SubDeviceRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
-      <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex items-center gap-2.5 min-w-0">
         <span
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
           style={{ backgroundColor: `${color}1a`, color }}
@@ -73,98 +136,123 @@ function SubDeviceRow({
           </p>
         </div>
       </div>
-      <StatusBadge label={online ? "Connected" : "Disconnected"} tone={online ? "success" : "muted"} />
+      <StatusBadge label={online ? "Online" : "Offline"} tone={online ? "success" : "muted"} />
     </div>
   );
 }
 
-export default function DevicesPage() {
-  const supabase = createClient();
-  const router = useRouter();
+export default function DevicePage() {
+  const supabase = useRef(createClient()).current;
 
-  const [devices, setDevices] = useState<RobotStatus[]>([]);
-  const [latestByRobot, setLatestByRobot] = useState<Record<string, SensorReading>>({});
-  const [cameraLastSeenByRobot, setCameraLastSeenByRobot] = useState<Record<string, string | null>>({});
+  const [status, setStatus] = useState<RobotStatus | null>(null);
+  const [latest, setLatest] = useState<SensorReading | null>(null);
+  const [messages, setMessages] = useState<DeviceMessage[]>([]);
+  const [commands, setCommands] = useState<RobotCommandRow[]>([]);
+  const [cameraLastSeen, setCameraLastSeen] = useState<string | null>(null);
   const [cameraChecked, setCameraChecked] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  async function loadDevices() {
-    const { data } = await supabase
-      .from("robot_status")
-      .select("*")
-      .order("robot_id", { ascending: true })
-      .returns<RobotStatus[]>();
-    setDevices(data ?? []);
-    return data ?? [];
-  }
-
-  async function loadLatestSensors(robotIds: string[]) {
-    const entries = await Promise.all(
-      robotIds.map(async (id) => {
-        const { data } = await supabase
-          .from("sensor_data")
-          .select("*")
-          .eq("robot_id", id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle<SensorReading>();
-        return [id, data] as const;
-      })
-    );
-    const map: Record<string, SensorReading> = {};
-    for (const [id, data] of entries) if (data) map[id] = data;
-    setLatestByRobot(map);
-  }
-
-  async function loadLatestCameraFrames(robotIds: string[]) {
-    const entries = await Promise.all(
-      robotIds.map(async (id) => {
-        const { data } = await supabase.storage.from(CAMERA_BUCKET).list("", {
-          limit: 1,
-          sortBy: { column: "created_at", order: "desc" },
-          search: id,
-        });
-        const file = data?.[0];
-        return [id, file?.created_at ?? file?.updated_at ?? null] as const;
-      })
-    );
-    setCameraChecked(true);
-    setCameraLastSeenByRobot(Object.fromEntries(entries));
-  }
-
+  // Initial fetch — everything in parallel
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      const rows = await loadDevices();
+      const [{ data: statusRow }, { data: latestRow }, { data: msgRows }, { data: cmdRows }] =
+        await Promise.all([
+          supabase.from("robot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
+          supabase
+            .from("sensor_data")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle<SensorReading>(),
+          supabase
+            .from("device_messages")
+            .select("*")
+            .eq("robot_id", ROBOT_ID)
+            .order("created_at", { ascending: false })
+            .limit(MESSAGE_ROWS)
+            .returns<DeviceMessage[]>(),
+          supabase
+            .from("robot_commands")
+            .select("*")
+            .eq("robot_id", ROBOT_ID)
+            .order("created_at", { ascending: false })
+            .limit(COMMAND_ROWS)
+            .returns<RobotCommandRow[]>(),
+        ]);
       if (cancelled) return;
-      const ids = rows.map((r) => r.robot_id);
-      await Promise.all([loadLatestSensors(ids), loadLatestCameraFrames(ids)]);
-      if (!cancelled) setLoading(false);
+      if (statusRow) setStatus(statusRow);
+      if (latestRow) setLatest(latestRow);
+      if (msgRows) setMessages(msgRows);
+      if (cmdRows) setCommands(cmdRows);
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabase]);
 
-  // Realtime — controller status
+  // Realtime: robot_status
   useEffect(() => {
     const channel = supabase
-      .channel("devices_page_status")
+      .channel("device_page_status")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status" },
+        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${ROBOT_ID}` },
+        (payload) => setStatus(payload.new as RobotStatus)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Realtime: sensor_data
+  useEffect(() => {
+    const channel = supabase
+      .channel("device_page_sensors")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sensor_data" },
+        (payload) => setLatest(payload.new as SensorReading)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Realtime: device_messages
+  useEffect(() => {
+    const channel = supabase
+      .channel("device_page_messages")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "device_messages", filter: `robot_id=eq.${ROBOT_ID}` },
         (payload) => {
-          const row = payload.new as RobotStatus;
-          setDevices((prev) => {
-            const idx = prev.findIndex((d) => d.robot_id === row.robot_id);
-            if (idx === -1) return [...prev, row].sort((a, b) => a.robot_id.localeCompare(b.robot_id));
-            const next = [...prev];
-            next[idx] = row;
-            return next;
+          const row = payload.new as DeviceMessage;
+          setMessages((prev) => [row, ...prev].slice(0, MESSAGE_ROWS));
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Realtime: robot_commands
+  useEffect(() => {
+    const channel = supabase
+      .channel("device_page_commands")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "robot_commands", filter: `robot_id=eq.${ROBOT_ID}` },
+        (payload) => {
+          const row = payload.new as RobotCommandRow;
+          setCommands((prev) => {
+            const withoutOld = prev.filter((c) => c.id !== row.id);
+            return [row, ...withoutOld]
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .slice(0, COMMAND_ROWS);
           });
         }
       )
@@ -174,161 +262,265 @@ export default function DevicesPage() {
     };
   }, [supabase]);
 
-  // Realtime — sensor readings (feeds Sensors + GPS rows)
+  // Poll Storage for the newest camera frame (camera has no realtime signal)
   useEffect(() => {
-    const channel = supabase
-      .channel("devices_page_sensors")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sensor_data" },
-        (payload) => {
-          const row = payload.new as SensorReading & { robot_id?: string };
-          const id = row.robot_id ?? "agribot-01";
-          setLatestByRobot((prev) => ({ ...prev, [id]: row }));
-        }
-      )
-      .subscribe();
+    let cancelled = false;
+
+    async function fetchLatestImage() {
+      const { data, error } = await supabase.storage.from(CAMERA_BUCKET).list("", {
+        limit: 1,
+        sortBy: { column: "created_at", order: "desc" },
+        search: ROBOT_ID,
+      });
+      if (cancelled) return;
+      setCameraChecked(true);
+      if (error || !data || data.length === 0) return;
+      const latestFile = data[0];
+      setCameraLastSeen(latestFile.created_at ?? latestFile.updated_at ?? null);
+    }
+
+    fetchLatestImage();
+    const interval = setInterval(fetchLatestImage, CAMERA_POLL_MS);
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(interval);
     };
   }, [supabase]);
 
-  // Poll Storage for newest camera frame per device (camera has no realtime signal)
   useEffect(() => {
-    if (devices.length === 0) return;
-    const ids = devices.map((d) => d.robot_id);
-    const interval = setInterval(() => loadLatestCameraFrames(ids), CAMERA_POLL_MS);
+    const interval = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [devices.map((d) => d.robot_id).join(",")]);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(id);
   }, []);
 
-  async function refresh() {
-    setBusy(true);
-    const rows = await loadDevices();
-    const ids = rows.map((r) => r.robot_id);
-    await Promise.all([loadLatestSensors(ids), loadLatestCameraFrames(ids)]);
-    setBusy(false);
-  }
+  const heartbeatOnline =
+    !!status?.online &&
+    !!status?.updated_at &&
+    now - new Date(status.updated_at).getTime() < HEARTBEAT_STALE_MS;
+
+  const hasGps = latest?.latitude != null && latest?.longitude != null;
+  const gpsOnline =
+    hasGps && !!latest?.created_at && now - new Date(latest.created_at).getTime() < HEARTBEAT_STALE_MS;
+  const sensorOnline =
+    !!latest?.created_at && now - new Date(latest.created_at).getTime() < HEARTBEAT_STALE_MS;
+  const cameraOnline =
+    !!cameraLastSeen && now - new Date(cameraLastSeen).getTime() < CAMERA_STALE_MS;
 
   return (
-    <DashboardShell title="Devices" subtitle="Connection status">
+    <DashboardShell title="ESP32 Device" subtitle={ROBOT_ID} online={heartbeatOnline}>
       <>
-        <button
-          onClick={() => router.back()}
-          className="mb-4 flex items-center gap-1 text-xs font-medium text-muted transition hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back
-        </button>
+        <SectionHeading
+          eyebrow="Full Device View"
+          title="Everything about your ESP32"
+          desc="Live status, sensors, GPS, recent commands, and the message log — all in one place."
+        />
 
-        <div className="mb-3 flex items-center justify-between">
-          <SectionHeading eyebrow="ESP32" title="Connected devices" />
-          <button
-            onClick={refresh}
-            disabled={busy}
-            className="text-muted transition hover:text-foreground"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-          </button>
+        {/* Top status card */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-full text-white shadow-sm"
+                style={{ backgroundColor: heartbeatOnline ? "#16a34a" : "#9ca3af" }}
+              >
+                {heartbeatOnline ? <Wifi className="h-6 w-6" /> : <WifiOff className="h-6 w-6" />}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                  {ROBOT_ID}
+                </p>
+                <p className="text-xs text-muted dark:text-gray-400">
+                  Last heartbeat {timeAgo(status?.updated_at, now)} · {absoluteTime(status?.updated_at)}
+                </p>
+              </div>
+            </div>
+            <StatusBadge label={heartbeatOnline ? "Online" : "Offline"} tone={heartbeatOnline ? "success" : "muted"} />
+          </div>
+        </Card>
+
+        {/* Link health — per-subsystem online/offline */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Link Health
+          </p>
+          <Card className="p-3">
+            <div className="flex flex-col divide-y divide-border dark:divide-gray-800">
+              <LinkRow
+                icon={heartbeatOnline ? Wifi : WifiOff}
+                color="#16a34a"
+                title="ESP32 Heartbeat"
+                online={heartbeatOnline}
+                agoLabel={timeAgo(status?.updated_at, now)}
+                detail={status ? `mode: ${status.mode}` : undefined}
+              />
+              <LinkRow
+                icon={MapPin}
+                color="#0ea5e9"
+                title="GPS Location"
+                online={gpsOnline}
+                agoLabel={timeAgo(latest?.created_at, now)}
+                detail={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "no fix"}
+              />
+              <LinkRow
+                icon={Thermometer}
+                color="#f59e0b"
+                title="Sensors"
+                online={sensorOnline}
+                agoLabel={timeAgo(latest?.created_at, now)}
+              />
+              <LinkRow
+                icon={Camera}
+                color="#8b5cf6"
+                title="Camera (ESP32-CAM)"
+                online={cameraOnline}
+                agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
+              />
+            </div>
+          </Card>
         </div>
 
-        {loading ? (
-          <p className="text-xs text-muted dark:text-gray-400">Loading…</p>
-        ) : devices.length === 0 ? (
-          <Card className="p-4">
-            <p className="text-xs text-muted dark:text-gray-400">
-              No devices have reported in yet.
-            </p>
+        {/* Robot state */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Robot State
+          </p>
+          <Card className="grid grid-cols-2 gap-y-4 p-4">
+            <Stat icon={Cog} color="#6366f1" label="Mode" value={status?.mode ?? "—"} />
+            <Stat icon={Bot} color="#3b82f6" label="Motor" value={status?.motor_state ?? "—"} />
+            <Stat icon={Zap} color="#16a34a" label="Pump" value={status?.pump_status ? "ON" : "OFF"} />
+            <Stat icon={Gauge} color="#8b5cf6" label="Speed" value={status?.speed_value ?? "—"} />
           </Card>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {devices.map((d) => {
-              const controllerStale =
-                Date.now() - new Date(d.updated_at).getTime() > HEARTBEAT_STALE_MS;
-              const controllerConnected = d.online && !controllerStale;
+        </div>
 
-              const latest = latestByRobot[d.robot_id];
-              const sensorConnected =
-                !!latest?.created_at &&
-                Date.now() - new Date(latest.created_at).getTime() < HEARTBEAT_STALE_MS;
-              const hasGps = latest?.latitude != null && latest?.longitude != null;
-              const gpsConnected = hasGps && sensorConnected;
+        {/* Sensors */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Sensors · {timeAgo(latest?.created_at, now)}
+          </p>
+          <Card className="grid grid-cols-2 gap-y-4 p-4">
+            <Stat
+              icon={Thermometer}
+              color="#f59e0b"
+              label="Temperature"
+              value={latest?.temperature != null ? `${latest.temperature}°C` : "—"}
+            />
+            <Stat
+              icon={Radio}
+              color="#0ea5e9"
+              label="Humidity"
+              value={latest?.humidity != null ? `${latest.humidity}%` : "—"}
+            />
+            <Stat
+              icon={Droplet}
+              color="#16a34a"
+              label="Soil Moisture"
+              value={latest?.soil_moisture != null ? `${latest.soil_moisture}%` : "—"}
+            />
+            <Stat
+              icon={Navigation}
+              color="#8b5cf6"
+              label="Ultrasonic"
+              value={latest?.distance_cm != null ? `${latest.distance_cm.toFixed(1)} cm` : "—"}
+            />
+            <Stat
+              icon={Battery}
+              color="#dc2626"
+              label="Battery"
+              value={
+                latest?.battery_voltage != null
+                  ? `${latest.battery_voltage.toFixed(1)}V (${latest.battery_percent ?? "—"}%)`
+                  : "—"
+              }
+            />
+            <Stat
+              icon={MapPin}
+              color="#f97316"
+              label="GPS"
+              value={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "No fix"}
+            />
+          </Card>
+        </div>
 
-              const cameraLastSeen = cameraLastSeenByRobot[d.robot_id] ?? null;
-              const cameraConnected =
-                !!cameraLastSeen && Date.now() - new Date(cameraLastSeen).getTime() < CAMERA_STALE_MS;
-
-              return (
-                <Card key={d.robot_id} className="p-4">
-                  {/* Controller */}
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2.5">
-                      <IconTile icon={Bot} size={36} />
-                      <span>
-                        <span className="block text-sm font-semibold text-foreground dark:text-gray-100">
-                          {d.name || d.robot_id}
-                        </span>
-                        <span className="block text-[11px] text-muted dark:text-gray-400">
-                          {d.robot_id} · Main controller
-                        </span>
+        {/* Recent commands */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Recent Commands
+          </p>
+          <Card className="p-3">
+            {commands.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted dark:text-gray-400">No commands yet.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-border dark:divide-gray-800">
+                {commands.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Terminal className="h-3.5 w-3.5 shrink-0 text-muted dark:text-gray-500" />
+                      <span className="truncate text-sm font-medium text-foreground dark:text-gray-100">
+                        {c.command}
+                        {c.value != null ? ` (${c.value})` : ""}
                       </span>
-                    </span>
-                    <StatusBadge
-                      label={controllerConnected ? "Connected" : "Disconnected"}
-                      tone={controllerConnected ? "success" : "muted"}
-                    />
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-[11px] text-muted dark:text-gray-500">{timeAgo(c.created_at, now)}</span>
+                      <StatusBadge
+                        label={c.executed ? "Executed" : "Pending"}
+                        tone={c.executed ? "success" : "warning"}
+                        dot={false}
+                      />
+                    </div>
                   </div>
-                  <p className="mt-2 flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
-                    <Clock className="h-3 w-3" />
-                    Last heartbeat {timeAgo(d.updated_at, now)} · Mode {d.mode}
-                  </p>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
 
-                  {/* Attached devices */}
-                  <div className="mt-3 divide-y divide-border border-t border-border pt-1 dark:divide-gray-800 dark:border-gray-800">
-                    <SubDeviceRow
-                      icon={Thermometer}
-                      color="#f59e0b"
-                      title="Sensor Board (soil, temp, humidity, ultrasonic, battery)"
-                      online={sensorConnected}
-                      agoLabel={timeAgo(latest?.created_at, now)}
-                    />
-                    <SubDeviceRow
-                      icon={MapPin}
-                      color="#0ea5e9"
-                      title="GPS Module"
-                      online={gpsConnected}
-                      agoLabel={timeAgo(latest?.created_at, now)}
-                      detail={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "no fix"}
-                    />
-                    <SubDeviceRow
-                      icon={Camera}
-                      color="#8b5cf6"
-                      title="Camera (ESP32-CAM)"
-                      online={cameraConnected}
-                      agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
-                    />
-                    <SubDeviceRow
-                      icon={Cpu}
-                      color="#16a34a"
-                      title="Motor / Pump Controller"
-                      online={controllerConnected}
-                      agoLabel={timeAgo(d.updated_at, now)}
-                      detail={`pump ${d.pump_status ? "on" : "off"} · motor ${d.motor_state}`}
-                    />
+        {/* Message log */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Message Log
+          </p>
+          <div className="flex flex-col gap-2">
+            {messages.length === 0 && (
+              <Card className="p-4">
+                <p className="text-center text-sm text-muted dark:text-gray-400">No messages yet.</p>
+              </Card>
+            )}
+            {messages.map((m) => {
+              const style = LEVEL_STYLE[m.level];
+              const Icon = style.icon;
+              const fromEsp32 = m.origin === "esp32";
+              return (
+                <Card key={m.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                      style={{ backgroundColor: `${style.color}1a`, color: style.color }}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted dark:text-gray-400">
+                        {fromEsp32 ? <Cpu className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+                        {fromEsp32 ? "ESP32" : "Website"}
+                        <span className="text-muted/50 dark:text-gray-600">
+                          · {timeAgo(m.created_at, now)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-sm text-foreground dark:text-gray-100">{m.message}</p>
+                    </div>
                   </div>
                 </Card>
               );
             })}
           </div>
-        )}
+        </div>
+
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted dark:text-gray-500">
+          <MessageSquare className="h-3 w-3" />
+          All data updates live — no refresh needed.
+        </p>
       </>
     </DashboardShell>
   );
-            }
-                      
+         }
+      
