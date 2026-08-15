@@ -28,7 +28,6 @@ const NAV_SECTIONS = [
       { href: "/irrigation", label: "Smart Irrigation", icon: Droplet },
       { href: "/camera", label: "Camera Feed", icon: Camera },
       { href: "/connection", label: "Connection", icon: Wifi },
-      { href: "/messages", label: "Messages", icon: MessageSquare },
     ],
   },
   {
@@ -262,3 +261,4 @@ export function DashboardShell({
 
 
 
+            
