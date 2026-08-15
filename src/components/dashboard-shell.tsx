@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme-context";
 import {
-  LayoutDashboard, Map, Bot, Camera, LineChart, Sparkles, Leaf,
-  Bell, User, Shield, Menu, X, Sun, Moon, LogOut, Droplet, History, Brain, Wifi, MessageSquare, Cpu,
+  LayoutDashboard, Map, Bot, Sparkles, Leaf,
+  Bell, User, Sun, Moon,
 } from "lucide-react";
 
 const BOTTOM_NAV_ITEMS = [
@@ -15,33 +14,6 @@ const BOTTOM_NAV_ITEMS = [
   { href: "/field", label: "Farm", icon: Map },
   { href: "/robot", label: "Robot", icon: Bot },
   { href: "/assistant", label: "AI", icon: Sparkles },
-];
-
-const NAV_SECTIONS = [
-  { label: "Overview", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
-  {
-    label: "Field",
-    items: [
-      { href: "/field", label: "Field Map", icon: Map },
-      { href: "/robot", label: "Robot Control", icon: Bot },
-      { href: "/device", label: "ESP32 Device", icon: Cpu },
-      { href: "/camera", label: "Camera Feed", icon: Camera },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { href: "/analytics", label: "Monitoring", icon: LineChart },
-      { href: "/insights", label: "AI Insights", icon: Brain },
-      { href: "/recommendations", label: "Recommendations", icon: Leaf },
-      { href: "/assistant", label: "AI Assistant", icon: Sparkles },
-      { href: "/alerts", label: "Alerts", icon: Bell },
-      { href: "/history", label: "Robot History", icon: History },
-    ],
-  },
-  { label: "Account", items: [
-    { href: "/profile", label: "Profile", icon: User },
-  ] },
 ];
 
 export function DashboardShell({
@@ -58,130 +30,23 @@ export function DashboardShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { theme, toggleTheme } = useTheme();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
-
-  const sections = isAdmin
-    ? [...NAV_SECTIONS, { label: "Admin", items: [{ href: "/admin", label: "Admin Panel", icon: Shield }] }]
-    : NAV_SECTIONS;
-
-  const NavLinks = ({ collapsed = false }: { collapsed?: boolean }) => (
-    <>
-      {sections.map((section) => (
-        <div key={section.label} className="mb-4">
-          {!collapsed && (
-            <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted dark:text-gray-500">
-              {section.label}
-            </p>
-          )}
-          {section.items.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname?.startsWith(`${href}/`);
-            return (
-              <Link
-                key={href}
-                href={href}
-                title={collapsed ? label : undefined}
-                onClick={() => setMobileOpen(false)}
-                className={`mb-0.5 flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition ${
-                  collapsed ? "justify-center" : ""
-                } ${
-                  active
-                    ? "bg-primary text-white shadow-sm shadow-primary/30"
-                    : "text-foreground/80 hover:bg-surface dark:text-gray-300 dark:hover:bg-gray-800"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2.4 : 2} />
-                {!collapsed && label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
-    </>
-  );
+  // isAdmin is accepted for backwards compatibility with existing callers
+  // (the sidebar used to show an Admin Panel link); it's currently unused
+  // now that the drawer nav has been removed.
+  void isAdmin;
 
   return (
-    <div className="min-h-screen bg-surface dark:bg-gray-950 md:flex">
-      {/* Desktop sidebar — hidden by default, opens on menu click */}
-      {sidebarOpen && (
-        <aside className="hidden w-60 shrink-0 border-r border-border bg-white p-4 dark:border-gray-800 dark:bg-gray-900 md:block">
-          <div className="mb-6 flex items-center justify-between px-1">
-            <span className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-                <Leaf className="h-4.5 w-4.5" />
-              </span>
-              <span className="text-sm font-bold text-foreground dark:text-gray-100">
-                Agri<span className="text-primary">Bot</span>
-              </span>
-            </span>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="rounded-lg p-1.5 text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
-              aria-label="Close menu"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-          </div>
-
-          <NavLinks />
-
-          <button
-            onClick={handleLogout}
-            className="mt-4 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted transition hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
-          >
-            <LogOut className="h-4 w-4" />
-            Log out
-          </button>
-        </aside>
-      )}
-
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-64 overflow-y-auto bg-white p-4 dark:bg-gray-900">
-            <div className="mb-6 flex items-center justify-between px-1">
-              <span className="text-sm font-bold text-foreground dark:text-gray-100">
-                Agri<span className="text-primary">Bot</span>
-              </span>
-              <button onClick={() => setMobileOpen(false)} aria-label="Close menu">
-                <X className="h-5 w-5 text-muted" />
-              </button>
-            </div>
-            <NavLinks />
-            <button
-              onClick={handleLogout}
-              className="mt-4 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted dark:text-gray-400"
-            >
-              <LogOut className="h-4 w-4" />
-              Log out
-            </button>
-          </aside>
-        </div>
-      )}
-
+    <div className="min-h-screen bg-surface dark:bg-gray-950">
       <div className="flex-1">
         {/* Topbar */}
         <header className="sticky top-0 z-20 border-b border-border bg-white/90 px-4 py-4 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {!sidebarOpen && (
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="hidden rounded-lg p-1.5 text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800 md:block"
-                  aria-label="Open menu"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-              )}
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+                <Leaf className="h-4.5 w-4.5" />
+              </span>
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-foreground dark:text-gray-100">
                   {title}
@@ -204,6 +69,28 @@ export function DashboardShell({
                   {online ? "Online" : "Offline"}
                 </span>
               )}
+              <Link
+                href="/alerts"
+                className={`rounded-lg p-2 transition ${
+                  pathname === "/alerts"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
+                }`}
+                aria-label="Alerts"
+              >
+                <Bell className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/profile"
+                className={`rounded-lg p-2 transition ${
+                  pathname === "/profile"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
+                }`}
+                aria-label="Profile"
+              >
+                <User className="h-4 w-4" />
+              </Link>
               <button
                 onClick={toggleTheme}
                 className="rounded-lg p-2 text-muted hover:bg-surface dark:text-gray-400 dark:hover:bg-gray-800"
@@ -243,18 +130,10 @@ export function DashboardShell({
             </Link>
           );
         })}
-
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="flex flex-1 flex-col items-center gap-0.5 rounded-full py-1.5 text-[10px] text-muted dark:text-gray-400"
-        >
-          <Menu className="h-5 w-5" />
-          More
-        </button>
       </nav>
     </div>
   );
-    }
+}
 
 
 
@@ -263,4 +142,5 @@ export function DashboardShell({
        
 
 
-            
+
+                
