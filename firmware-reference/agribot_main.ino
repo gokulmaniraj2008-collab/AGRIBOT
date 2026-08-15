@@ -60,6 +60,26 @@ const unsigned long MS_PER_PLANT_STEP = 1500;   // start estimate, recalibrate
 const unsigned long PATROL_SETTLE_MS = 500;
 const float PATROL_OBSTACLE_STOP_CM = 15.0f;
 
+// --- Patrol auto-watering ---
+const float PATROL_WATER_THRESHOLD = 30.0f;     // below this soil %, water the plant
+const unsigned long PATROL_WATER_MS = 3000;     // pump-on duration per plant — start
+                                                 // estimate, calibrate to your pump's
+                                                 // flow rate and pot/root size
+
+// --- GPS go-to-plant navigation (PROTOTYPE — NEO-6M is only accurate to
+// ~2.5-3m, so this gets the robot CLOSE to a saved spot, not exactly on
+// top of it. Not a substitute for the ultrasonic-based patrol precision.) ---
+const float GPS_ARRIVE_RADIUS_M = 2.0f;   // stop when within this many meters
+const unsigned long GPS_NAV_TIMEOUT_MS = 60000;  // give up after 1 min so it
+                                                  // can't wander forever if
+                                                  // GPS drops or overshoots
+const unsigned long GPS_DRIVE_PULSE_MS = 800;    // drive straight this long,
+                                                  // then re-check position
+const unsigned long GPS_TURN_PULSE_MS = 300;     // turn this long to correct
+                                                  // heading before next pulse
+const float GPS_HEADING_TOLERANCE_DEG = 20.0f;   // don't bother turning for
+                                                  // errors smaller than this
+
 unsigned long lastSensorPush = 0;
 unsigned long lastStatusPush = 0;
 unsigned long lastCommandPoll = 0;
@@ -278,13 +298,154 @@ void patrolRow(int numPlants) {
         postJson(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload, false);
       }
 
-      if (soilPercent < 30.0f) {
-        pushMessage("Plant " + String(plantIndex) + " is dry (" + String(soilPercent, 0) + "%)", "warning");
+      if (soilPercent < PATROL_WATER_THRESHOLD) {
+        pushMessage("Plant " + String(plantIndex) + " is dry (" + String(soilPercent, 0) +
+                    "%) — watering for " + String(PATROL_WATER_MS / 1000) + "s", "warning");
+
+        digitalWrite(RELAY_PIN, HIGH); digitalWrite(LED_PUMP_PIN, HIGH); pumpStatus = true;
+        pushRobotStatus();
+        delay(PATROL_WATER_MS);
+        digitalWrite(RELAY_PIN, LOW); digitalWrite(LED_PUMP_PIN, LOW); pumpStatus = false;
+        pushRobotStatus();
+
+        pushMessage("Plant " + String(plantIndex) + ": watering done", "success");
       }
     }
   }
 
   pushMessage("Patrol complete: " + String(numPlants) + " plant(s) checked", "success");
+}
+
+// Records the robot's current GPS fix as "plant N is here." Upserts so
+// re-saving the same plant index overwrites the old spot.
+void savePlantLocation(int plantIndex) {
+  if (!gps.location.isValid()) {
+    pushMessage("Can't save plant " + String(plantIndex) + ": no GPS fix yet", "warning");
+    return;
+  }
+  StaticJsonDocument<256> doc;
+  doc["robot_id"] = ROBOT_ID;
+  doc["plant_index"] = plantIndex;
+  doc["latitude"] = gps.location.lat();
+  doc["longitude"] = gps.location.lng();
+  String payload; serializeJson(doc, payload);
+  String url = String(SUPABASE_URL) + "/rest/v1/plant_locations?on_conflict=robot_id,plant_index";
+  int code = postJson(url, payload, true);
+  if (code >= 200 && code < 300) {
+    pushMessage("Saved plant " + String(plantIndex) + " location", "success");
+  } else {
+    pushMessage("Failed to save plant " + String(plantIndex) + " location (HTTP " + String(code) + ")", "warning");
+  }
+}
+
+// PROTOTYPE navigation: drives in short straight pulses toward a saved
+// plant's GPS spot, correcting heading between pulses using GPS
+// course-over-ground (only reliable while actually moving — that's why
+// this alternates short drive/turn pulses instead of steering
+// continuously). Stops within GPS_ARRIVE_RADIUS_M — NOT exact-plant
+// precision, see the constants block above for why.
+void goToPlant(int plantIndex) {
+  if (WiFi.status() != WL_CONNECTED) {
+    pushMessage("Can't go to plant " + String(plantIndex) + ": no WiFi", "warning");
+    return;
+  }
+
+  String url = String(SUPABASE_URL) + "/rest/v1/plant_locations?robot_id=eq." + ROBOT_ID +
+               "&plant_index=eq." + String(plantIndex) + "&select=latitude,longitude&limit=1";
+  HTTPClient http;
+  if (!http.begin(url)) return;
+  addHeaders(http);
+  int code = http.GET();
+  double targetLat = 0, targetLng = 0;
+  bool found = false;
+  if (code == 200) {
+    DynamicJsonDocument doc(512);
+    if (!deserializeJson(doc, http.getString())) {
+      JsonArray arr = doc.as<JsonArray>();
+      if (arr.size() > 0) {
+        targetLat = arr[0]["latitude"] | 0.0;
+        targetLng = arr[0]["longitude"] | 0.0;
+        found = true;
+      }
+    }
+  }
+  http.end();
+
+  if (!found) {
+    pushMessage("No saved location for plant " + String(plantIndex), "warning");
+    return;
+  }
+
+  pushMessage("Heading to plant " + String(plantIndex), "info");
+  unsigned long navStart = millis();
+
+  while (millis() - navStart < GPS_NAV_TIMEOUT_MS) {
+    while (gpsSerial.available()) gps.encode(gpsSerial.read());
+
+    if (!gps.location.isValid()) {
+      stopMotors(); motorState = "stopped";
+      pushMessage("Lost GPS fix while navigating to plant " + String(plantIndex), "warning");
+      return;
+    }
+
+    double curLat = gps.location.lat();
+    double curLng = gps.location.lng();
+    double distanceM = TinyGPSPlus::distanceBetween(curLat, curLng, targetLat, targetLng);
+
+    if (distanceM <= GPS_ARRIVE_RADIUS_M) {
+      stopMotors(); motorState = "stopped";
+      pushMessage("Arrived near plant " + String(plantIndex) + " (within " +
+                  String(distanceM, 1) + "m)", "success");
+      return;
+    }
+
+    double bearingToTarget = TinyGPSPlus::courseTo(curLat, curLng, targetLat, targetLng);
+
+    // Drive a short pulse forward to get a fresh course-over-ground
+    // reading (GPS can't report heading while stationary).
+    digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW);
+    digitalWrite(IN3_PIN,HIGH); digitalWrite(IN4_PIN,LOW);
+    motorState = "forward"; applySpeed();
+    unsigned long pulseStart = millis();
+    bool obstacle = false;
+    while (millis() - pulseStart < GPS_DRIVE_PULSE_MS) {
+      while (gpsSerial.available()) gps.encode(gpsSerial.read());
+      float dist = readUltrasonicCm();
+      if (dist > 0 && dist < PATROL_OBSTACLE_STOP_CM) { obstacle = true; break; }
+      delay(20);
+    }
+    stopMotors(); motorState = "stopped";
+
+    if (obstacle) {
+      pushMessage("Navigation stopped: obstacle near plant " + String(plantIndex), "warning");
+      return;
+    }
+
+    if (gps.course.isValid() && gps.course.age() < 2000) {
+      double heading = gps.course.deg();
+      double headingError = bearingToTarget - heading;
+      while (headingError > 180) headingError -= 360;
+      while (headingError < -180) headingError += 360;
+
+      if (abs(headingError) > GPS_HEADING_TOLERANCE_DEG) {
+        if (headingError > 0) {
+          digitalWrite(IN1_PIN,HIGH); digitalWrite(IN2_PIN,LOW);
+          digitalWrite(IN3_PIN,LOW); digitalWrite(IN4_PIN,HIGH); motorState = "right";
+        } else {
+          digitalWrite(IN1_PIN,LOW); digitalWrite(IN2_PIN,HIGH);
+          digitalWrite(IN3_PIN,HIGH); digitalWrite(IN4_PIN,LOW); motorState = "left";
+        }
+        applySpeed();
+        delay(GPS_TURN_PULSE_MS);
+        stopMotors(); motorState = "stopped";
+      }
+    }
+    // If course isn't valid/fresh yet, just drive another pulse straight
+    // next loop — the next course reading will correct it.
+  }
+
+  stopMotors(); motorState = "stopped";
+  pushMessage("Gave up reaching plant " + String(plantIndex) + " after timeout", "warning");
 }
 
 void executeCommand(const String& command, int value) {
@@ -310,6 +471,10 @@ void executeCommand(const String& command, int value) {
     currentMode="manual";
   } else if (command == "patrol_row") {
     patrolRow(value > 0 ? value : 1);
+  } else if (command == "save_plant_location") {
+    savePlantLocation(value > 0 ? value : 1);
+  } else if (command == "goto_plant") {
+    goToPlant(value > 0 ? value : 1);
   }
   applySpeed();
 
