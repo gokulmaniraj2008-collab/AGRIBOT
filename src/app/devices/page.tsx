@@ -5,11 +5,23 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge, IconTile, SectionHeading } from "@/components/ui-kit";
-import type { RobotStatus } from "@/lib/types";
-import { Bot, ArrowLeft, RefreshCw, Wifi, WifiOff, Clock } from "lucide-react";
+import type { RobotStatus, SensorReading } from "@/lib/types";
+import {
+  Bot,
+  ArrowLeft,
+  RefreshCw,
+  Clock,
+  Thermometer,
+  MapPin,
+  Camera,
+  Cpu,
+} from "lucide-react";
 
-const HEARTBEAT_STALE_MS = 30_000; // same threshold used on /robot and /admin/robot
-const TICK_MS = 1000;
+const HEARTBEAT_STALE_MS = 30_000; // same threshold used on /robot, /admin/robot, /device
+const CAMERA_STALE_MS = 15_000;
+const CAMERA_POLL_MS = 5_000;
+const CAMERA_BUCKET = "robot-images";
+const TICK_MS = 1_000;
 
 function timeAgo(iso: string | null | undefined, now: number): string {
   if (!iso) return "—";
@@ -27,29 +39,109 @@ function timeAgo(iso: string | null | undefined, now: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/** One sub-device row inside a controller card (Sensors, GPS, Camera, ...) */
+function SubDeviceRow({
+  icon: Icon,
+  color,
+  title,
+  online,
+  agoLabel,
+  detail,
+}: {
+  icon: React.ElementType;
+  color: string;
+  title: string;
+  online: boolean;
+  agoLabel: string;
+  detail?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${color}1a`, color }}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground dark:text-gray-100">{title}</p>
+          <p className="flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
+            <Clock className="h-3 w-3" />
+            {agoLabel}
+            {detail && <span className="truncate">· {detail}</span>}
+          </p>
+        </div>
+      </div>
+      <StatusBadge label={online ? "Connected" : "Disconnected"} tone={online ? "success" : "muted"} />
+    </div>
+  );
+}
+
 export default function DevicesPage() {
   const supabase = createClient();
   const router = useRouter();
 
   const [devices, setDevices] = useState<RobotStatus[]>([]);
+  const [latestByRobot, setLatestByRobot] = useState<Record<string, SensorReading>>({});
+  const [cameraLastSeenByRobot, setCameraLastSeenByRobot] = useState<Record<string, string | null>>({});
+  const [cameraChecked, setCameraChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  async function load() {
+  async function loadDevices() {
     const { data } = await supabase
       .from("robot_status")
       .select("*")
       .order("robot_id", { ascending: true })
       .returns<RobotStatus[]>();
     setDevices(data ?? []);
+    return data ?? [];
+  }
+
+  async function loadLatestSensors(robotIds: string[]) {
+    const entries = await Promise.all(
+      robotIds.map(async (id) => {
+        const { data } = await supabase
+          .from("sensor_data")
+          .select("*")
+          .eq("robot_id", id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle<SensorReading>();
+        return [id, data] as const;
+      })
+    );
+    const map: Record<string, SensorReading> = {};
+    for (const [id, data] of entries) if (data) map[id] = data;
+    setLatestByRobot(map);
+  }
+
+  async function loadLatestCameraFrames(robotIds: string[]) {
+    const entries = await Promise.all(
+      robotIds.map(async (id) => {
+        const { data } = await supabase.storage.from(CAMERA_BUCKET).list("", {
+          limit: 1,
+          sortBy: { column: "created_at", order: "desc" },
+          search: id,
+        });
+        const file = data?.[0];
+        return [id, file?.created_at ?? file?.updated_at ?? null] as const;
+      })
+    );
+    setCameraChecked(true);
+    setCameraLastSeenByRobot(Object.fromEntries(entries));
   }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      await load();
+      const rows = await loadDevices();
+      if (cancelled) return;
+      const ids = rows.map((r) => r.robot_id);
+      await Promise.all([loadLatestSensors(ids), loadLatestCameraFrames(ids)]);
       if (!cancelled) setLoading(false);
     })();
     return () => {
@@ -58,7 +150,7 @@ export default function DevicesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Realtime — pick up new devices and status changes as they happen
+  // Realtime — controller status
   useEffect(() => {
     const channel = supabase
       .channel("devices_page_status")
@@ -82,7 +174,34 @@ export default function DevicesPage() {
     };
   }, [supabase]);
 
-  // Tick every second so "Xs ago" / online-vs-stale stays live
+  // Realtime — sensor readings (feeds Sensors + GPS rows)
+  useEffect(() => {
+    const channel = supabase
+      .channel("devices_page_sensors")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sensor_data" },
+        (payload) => {
+          const row = payload.new as SensorReading & { robot_id?: string };
+          const id = row.robot_id ?? "agribot-01";
+          setLatestByRobot((prev) => ({ ...prev, [id]: row }));
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Poll Storage for newest camera frame per device (camera has no realtime signal)
+  useEffect(() => {
+    if (devices.length === 0) return;
+    const ids = devices.map((d) => d.robot_id);
+    const interval = setInterval(() => loadLatestCameraFrames(ids), CAMERA_POLL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devices.map((d) => d.robot_id).join(",")]);
+
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(id);
@@ -90,7 +209,9 @@ export default function DevicesPage() {
 
   async function refresh() {
     setBusy(true);
-    await load();
+    const rows = await loadDevices();
+    const ids = rows.map((r) => r.robot_id);
+    await Promise.all([loadLatestSensors(ids), loadLatestCameraFrames(ids)]);
     setBusy(false);
   }
 
@@ -128,11 +249,24 @@ export default function DevicesPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {devices.map((d) => {
-              const isStale =
+              const controllerStale =
                 Date.now() - new Date(d.updated_at).getTime() > HEARTBEAT_STALE_MS;
-              const connected = d.online && !isStale;
+              const controllerConnected = d.online && !controllerStale;
+
+              const latest = latestByRobot[d.robot_id];
+              const sensorConnected =
+                !!latest?.created_at &&
+                Date.now() - new Date(latest.created_at).getTime() < HEARTBEAT_STALE_MS;
+              const hasGps = latest?.latitude != null && latest?.longitude != null;
+              const gpsConnected = hasGps && sensorConnected;
+
+              const cameraLastSeen = cameraLastSeenByRobot[d.robot_id] ?? null;
+              const cameraConnected =
+                !!cameraLastSeen && Date.now() - new Date(cameraLastSeen).getTime() < CAMERA_STALE_MS;
+
               return (
                 <Card key={d.robot_id} className="p-4">
+                  {/* Controller */}
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2.5">
                       <IconTile icon={Bot} size={36} />
@@ -141,39 +275,52 @@ export default function DevicesPage() {
                           {d.name || d.robot_id}
                         </span>
                         <span className="block text-[11px] text-muted dark:text-gray-400">
-                          {d.robot_id}
+                          {d.robot_id} · Main controller
                         </span>
                       </span>
                     </span>
                     <StatusBadge
-                      label={connected ? "Connected" : "Disconnected"}
-                      tone={connected ? "success" : "muted"}
+                      label={controllerConnected ? "Connected" : "Disconnected"}
+                      tone={controllerConnected ? "success" : "muted"}
                     />
                   </div>
+                  <p className="mt-2 flex items-center gap-1 text-[11px] text-muted dark:text-gray-400">
+                    <Clock className="h-3 w-3" />
+                    Last heartbeat {timeAgo(d.updated_at, now)} · Mode {d.mode}
+                  </p>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2.5">
-                    <div className="rounded-xl bg-background p-3 dark:bg-gray-800/50">
-                      <p className="flex items-center gap-1 text-[11px] font-medium text-muted dark:text-gray-400">
-                        {connected ? (
-                          <Wifi className="h-3 w-3" />
-                        ) : (
-                          <WifiOff className="h-3 w-3" />
-                        )}
-                        Mode
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold text-foreground dark:text-gray-100">
-                        {d.mode}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-background p-3 dark:bg-gray-800/50">
-                      <p className="flex items-center gap-1 text-[11px] font-medium text-muted dark:text-gray-400">
-                        <Clock className="h-3 w-3" />
-                        Last seen
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold text-foreground dark:text-gray-100">
-                        {timeAgo(d.updated_at, now)}
-                      </p>
-                    </div>
+                  {/* Attached devices */}
+                  <div className="mt-3 divide-y divide-border border-t border-border pt-1 dark:divide-gray-800 dark:border-gray-800">
+                    <SubDeviceRow
+                      icon={Thermometer}
+                      color="#f59e0b"
+                      title="Sensor Board (soil, temp, humidity, ultrasonic, battery)"
+                      online={sensorConnected}
+                      agoLabel={timeAgo(latest?.created_at, now)}
+                    />
+                    <SubDeviceRow
+                      icon={MapPin}
+                      color="#0ea5e9"
+                      title="GPS Module"
+                      online={gpsConnected}
+                      agoLabel={timeAgo(latest?.created_at, now)}
+                      detail={hasGps ? `${latest!.latitude!.toFixed(5)}, ${latest!.longitude!.toFixed(5)}` : "no fix"}
+                    />
+                    <SubDeviceRow
+                      icon={Camera}
+                      color="#8b5cf6"
+                      title="Camera (ESP32-CAM)"
+                      online={cameraConnected}
+                      agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
+                    />
+                    <SubDeviceRow
+                      icon={Cpu}
+                      color="#16a34a"
+                      title="Motor / Pump Controller"
+                      online={controllerConnected}
+                      agoLabel={timeAgo(d.updated_at, now)}
+                      detail={`pump ${d.pump_status ? "on" : "off"} · motor ${d.motor_state}`}
+                    />
                   </div>
                 </Card>
               );
@@ -183,5 +330,5 @@ export default function DevicesPage() {
       </>
     </DashboardShell>
   );
-          }
-                                                                                          
+    }
+    
