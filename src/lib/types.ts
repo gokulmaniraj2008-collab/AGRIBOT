@@ -13,6 +13,7 @@ export type SensorReading = {
 
 export type RobotStatus = {
   robot_id: string;
+  name: string;
   updated_at: string;
   online: boolean;
   mode: "manual" | "auto";
