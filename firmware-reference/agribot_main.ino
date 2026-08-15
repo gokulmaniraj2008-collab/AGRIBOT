@@ -229,6 +229,7 @@ bool driveOnePlantStep() {
   unsigned long stepStart = millis();
   bool obstacle = false;
   while (millis() - stepStart < MS_PER_PLANT_STEP) {
+    while (gpsSerial.available()) gps.encode(gpsSerial.read());
     float dist = readUltrasonicCm();
     if (dist > 0 && dist < PATROL_OBSTACLE_STOP_CM) {
       obstacle = true;
@@ -269,6 +270,10 @@ void patrolRow(int numPlants) {
         StaticJsonDocument<256> doc;
         doc["soil_moisture"] = soilPercent;
         doc["plant_index"] = plantIndex;
+        if (gps.location.isValid()) {
+          doc["latitude"] = gps.location.lat();
+          doc["longitude"] = gps.location.lng();
+        }
         String payload; serializeJson(doc, payload);
         postJson(String(SUPABASE_URL) + "/rest/v1/sensor_data", payload, false);
       }
