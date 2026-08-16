@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SectionHeading, StatusBadge } from "@/components/ui-kit";
 import type { SensorReading, RobotCommandRow } from "@/lib/types";
@@ -9,7 +10,7 @@ import {
 } from "recharts";
 import {
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square, Droplet,
-  Power, Gauge, Clock, ListChecks,
+  Power, Gauge, Clock, ListChecks, Trash2,
 } from "lucide-react";
 
 const COMMAND_META: Record<
@@ -48,8 +49,46 @@ export default function HistoryClient({
   initialReadings: SensorReading[];
   initialCommands: RobotCommandRow[];
 }) {
+  const supabase = createClient();
   const [readings] = useState<SensorReading[]>(initialReadings);
-  const [commands] = useState<RobotCommandRow[]>(initialCommands);
+  const [commands, setCommands] = useState<RobotCommandRow[]>(initialCommands);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Same "check profiles.role" pattern used on Profile / Admin / Activity Log.
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single<{ role: string }>();
+      setIsAdmin(profile?.role === "admin");
+    });
+  }, [supabase]);
+
+  async function deleteAllCommands() {
+    const confirmed = window.confirm(
+      "Delete ALL recent commands? This removes the full command history from Supabase and cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    // robot_commands has no natural "delete everything" filter, so this
+    // uses the standard Supabase workaround (id >= 0 matches every row)
+    // rather than an unfiltered delete. Actual permission is enforced by
+    // the table's RLS delete policy, not by this UI check.
+    const { error: err } = await supabase.from("robot_commands").delete().gte("id", 0);
+    if (err) {
+      setDeleteError(err.message);
+    } else {
+      setCommands([]);
+    }
+    setDeleting(false);
+  }
 
   const chronological = [...readings].reverse();
   const chartData = chronological.map((r) => ({
@@ -144,7 +183,25 @@ export default function HistoryClient({
         </div>
 
         <div className="mt-4">
-          <SectionHeading eyebrow="Log" title="Recent Commands" />
+          <div className="flex items-center justify-between gap-2">
+            <SectionHeading eyebrow="Log" title="Recent Commands" />
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={deleteAllCommands}
+                disabled={deleting || commands.length === 0}
+                className="mb-3 flex shrink-0 items-center gap-1.5 rounded-full border border-danger/30 bg-white px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5 disabled:opacity-50 dark:bg-gray-900"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {deleting ? "Deleting…" : "Delete all"}
+              </button>
+            )}
+          </div>
+          {deleteError && (
+            <div className="mb-3 rounded-xl border border-danger/30 bg-danger/5 px-3 py-2.5 text-xs font-medium text-danger">
+              {deleteError}
+            </div>
+          )}
           <div className="divide-y divide-border rounded-2xl border border-border bg-white shadow-sm dark:divide-gray-800 dark:border-gray-800 dark:bg-gray-900">
             {commands.length === 0 && (
               <p className="p-4 text-center text-xs text-muted dark:text-gray-400">
