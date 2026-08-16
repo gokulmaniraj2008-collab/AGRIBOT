@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { Card, PageHeader, StatusBadge } from "@/components/ui-kit";
+import { Card, StatusBadge } from "@/components/ui-kit";
 import type { RobotLog } from "@/lib/types";
 import {
   Navigation, Radar, Camera, Compass, Droplets, MapPin, ListTree,
@@ -37,9 +37,7 @@ export default function LogsClient({ initialLogs }: { initialLogs: RobotLog[] })
   const chronological = [...logs].reverse();
 
   return (
-    <DashboardShell>
-      <PageHeader title="Activity Log" />
-
+    <DashboardShell title="Activity Log" subtitle="Detect → verify → probe → water → save">
       {chronological.length === 0 && (
         <Card className="p-4 text-sm text-muted">
           No activity logged yet — logs appear here as the robot detects and
@@ -84,4 +82,4 @@ export default function LogsClient({ initialLogs }: { initialLogs: RobotLog[] })
       </div>
     </DashboardShell>
   );
-                  }
+}
