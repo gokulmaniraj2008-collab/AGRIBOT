@@ -92,6 +92,16 @@ export type DeviceMessage = {
   read: boolean;
 };
 
+export type RobotLog = {
+  id: number;
+  created_at: string;
+  robot_id: string;
+  plant_id: number | null;
+  event_type: string;
+  message: string;
+  value: number | null;
+};
+
 export type PlantAnalysis = {
   id: number;
   created_at: string;
