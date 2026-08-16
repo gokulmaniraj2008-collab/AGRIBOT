@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 const ROBOT_ID = "agribot-01";
+const CAM_ROBOT_ID = "agribot-01-cam";
 const HEARTBEAT_STALE_MS = 30_000;
 const CAMERA_BUCKET = "robot-images";
 const CAMERA_STALE_MS = 15_000;
@@ -150,15 +151,21 @@ export default function DevicePage() {
   const [commands, setCommands] = useState<RobotCommandRow[]>([]);
   const [cameraLastSeen, setCameraLastSeen] = useState<string | null>(null);
   const [cameraChecked, setCameraChecked] = useState(false);
+  const [cameraStatus, setCameraStatus] = useState<RobotStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   // Initial fetch — everything in parallel
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [{ data: statusRow }, { data: latestRow }, { data: msgRows }, { data: cmdRows }] =
+      const [{ data: statusRow }, { data: camStatusRow }, { data: latestRow }, { data: msgRows }, { data: cmdRows }] =
         await Promise.all([
           supabase.from("robot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
+          supabase
+            .from("robot_status")
+            .select("*")
+            .eq("robot_id", CAM_ROBOT_ID)
+            .maybeSingle<RobotStatus>(),
           supabase
             .from("sensor_data")
             .select("*")
@@ -182,6 +189,7 @@ export default function DevicePage() {
         ]);
       if (cancelled) return;
       if (statusRow) setStatus(statusRow);
+      if (camStatusRow) setCameraStatus(camStatusRow);
       if (latestRow) setLatest(latestRow);
       if (msgRows) setMessages(msgRows);
       if (cmdRows) setCommands(cmdRows);
@@ -199,6 +207,23 @@ export default function DevicePage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${ROBOT_ID}` },
         (payload) => setStatus(payload.new as RobotStatus)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Realtime: robot_status for the camera's own heartbeat row
+  // (separate row/id from the main robot — see CAM_ROBOT_ID note in
+  // esp32cam_supabase_upload.ino). Gives us camera_ip without polling.
+  useEffect(() => {
+    const channel = supabase
+      .channel("device_page_cam_status")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${CAM_ROBOT_ID}` },
+        (payload) => setCameraStatus(payload.new as RobotStatus)
       )
       .subscribe();
     return () => {
@@ -305,6 +330,14 @@ export default function DevicePage() {
   const cameraOnline =
     !!cameraLastSeen && now - new Date(cameraLastSeen).getTime() < CAMERA_STALE_MS;
 
+  // Live stream availability is judged from the camera's own heartbeat
+  // (fresher signal than the Storage-upload check above, since the
+  // heartbeat lands every 5s) plus needing a camera_ip to build the URL.
+  const cameraHeartbeatOnline =
+    !!cameraStatus?.updated_at && now - new Date(cameraStatus.updated_at).getTime() < HEARTBEAT_STALE_MS;
+  const cameraStreamUrl = cameraStatus?.camera_ip ? `http://${cameraStatus.camera_ip}/stream` : null;
+  const streamAvailable = cameraHeartbeatOnline && !!cameraStreamUrl;
+
   return (
     <DashboardShell title="ESP32 Device" subtitle={ROBOT_ID} online={heartbeatOnline}>
       <>
@@ -375,6 +408,48 @@ export default function DevicePage() {
                 agoLabel={cameraChecked ? timeAgo(cameraLastSeen, now) : "Checking…"}
               />
             </div>
+          </Card>
+        </div>
+
+        {/* Live camera stream — local WiFi only, see note below */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Live Camera
+          </p>
+          <Card className="p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="h-4 w-4" style={{ color: "#8b5cf6" }} />
+                <p className="text-sm font-semibold text-foreground dark:text-gray-100">
+                  AGRIBOT Live Camera
+                </p>
+              </div>
+              <StatusBadge
+                label={streamAvailable ? "Live" : "Unavailable"}
+                tone={streamAvailable ? "success" : "muted"}
+              />
+            </div>
+
+            {streamAvailable ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={cameraStreamUrl!}
+                alt="AGRIBOT live camera stream"
+                className="w-full rounded-xl border border-border dark:border-gray-800"
+              />
+            ) : (
+              <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-border text-xs text-muted dark:border-gray-800 dark:text-gray-400">
+                {cameraStatus?.camera_ip
+                  ? "Camera heartbeat stale — stream unavailable"
+                  : "Waiting for camera to report its IP…"}
+              </div>
+            )}
+
+            <p className="mt-2 text-[11px] text-muted dark:text-gray-500">
+              Local WiFi only — this stream loads directly from the camera&apos;s
+              IP ({cameraStatus?.camera_ip ?? "unknown"}), so it only plays when
+              your device is on the same network as AGRIBOT.
+            </p>
           </Card>
         </div>
 
@@ -477,50 +552,4 @@ export default function DevicePage() {
         {/* Message log */}
         <div className="mt-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
-            Message Log
-          </p>
-          <div className="flex flex-col gap-2">
-            {messages.length === 0 && (
-              <Card className="p-4">
-                <p className="text-center text-sm text-muted dark:text-gray-400">No messages yet.</p>
-              </Card>
-            )}
-            {messages.map((m) => {
-              const style = LEVEL_STYLE[m.level];
-              const Icon = style.icon;
-              const fromEsp32 = m.origin === "esp32";
-              return (
-                <Card key={m.id} className="p-3">
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                      style={{ backgroundColor: `${style.color}1a`, color: style.color }}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted dark:text-gray-400">
-                        {fromEsp32 ? <Cpu className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
-                        {fromEsp32 ? "ESP32" : "Website"}
-                        <span className="text-muted/50 dark:text-gray-600">
-                          · {timeAgo(m.created_at, now)}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-sm text-foreground dark:text-gray-100">{m.message}</p>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted dark:text-gray-500">
-          <MessageSquare className="h-3 w-3" />
-          All data updates live — no refresh needed.
-        </p>
-      </>
-    </DashboardShell>
-  );
-         }
-      
+         
