@@ -128,16 +128,43 @@ const unsigned long PLANT_MIN_STEP_MS = 800;  // minimum time after clearance
 //   CAMERA ONLINE                 -> photo + classify, gate on the result
 //   CAMERA OFFLINE                -> skip verification, go straight to soil check
 //   CAMERA ONLINE + "not a plant" -> genuine rejection, retry the scan
-// REQUIRES: (1) a DB migration adding "camera_check" to the
-// robot_commands.command CHECK constraint, and (2) the updated
-// esp32cam_supabase_upload.ino that (a) polls for and answers that
-// command, and (b) heartbeats its own presence into robot_status under
-// CAM_ROBOT_ID the same way THIS board's pushRobotStatus() does for
-// ROBOT_ID. Until both exist, isCameraOnline() will just always read
-// "no row found" -> offline -> camera auto-skipped (safe, but pointless).
+//
+// Status (verified 2026-08-16 against the live DB and the fixed
+// esp32cam_supabase_upload.ino — see that file's header for details):
+//   1. "camera_check" is now in the robot_commands.command CHECK
+//      constraint — requests from this board no longer get rejected.
+//   2. The fixed CAM firmware heartbeats into robot_status under
+//      CAM_ROBOT_ID below on its own HEARTBEAT_INTERVAL_MS, and fixed
+//      its robot_images.storage_path bug (was hard-coded to "", which
+//      is UNIQUE NOT NULL in the DB — broke every classification after
+//      the first one).
+//   3. isCameraOnline() below calls the public.is_camera_online() RPC
+//      instead of reading the "online" column directly — that RPC
+//      checks BOTH online=true AND updated_at freshness server-side
+//      (via Postgres's own now(), see CAMERA_HEARTBEAT_MAX_AGE_S),
+//      since this board has no RTC/NTP and can't safely judge a
+//      timestamp's age itself.
+// Still untested end-to-end on real hardware as of this comment — test
+// heartbeat, then camera_check, then several repeated classifications
+// in a row, before trusting this in an unattended AUTO run.
 const char* CAM_ROBOT_ID = "agribot-01-cam";  // robot_id the ESP32-CAM
                                                // heartbeats under in
-                                               // robot_status.
+                                               // robot_status. Must match
+                                               // CAM_ROBOT_ID in
+                                               // esp32cam_supabase_upload.ino
+                                               // exactly.
+const int CAMERA_HEARTBEAT_MAX_AGE_S = 15;    // a heartbeat older than this
+                                               // (by Postgres's own clock) is
+                                               // treated as offline, even if
+                                               // the "online" column still
+                                               // says true — catches a camera
+                                               // that lost power/WiFi without
+                                               // a clean disconnect to flip
+                                               // the flag itself. Kept at 3x
+                                               // the CAM's own
+                                               // HEARTBEAT_INTERVAL_MS (5000ms)
+                                               // so ordinary network jitter
+                                               // doesn't flap this false.
 // Manual kill-switch for testing/debugging only — leave false. When
 // true, camera use is forced off regardless of what isCameraOnline()
 // reports, without touching the detection logic itself.
@@ -677,39 +704,39 @@ bool cameraUnavailable(int plantIndex, const String& reason) {
   return true;
 }
 
-// Asks Supabase whether the ESP32-CAM has a recent "online" heartbeat
-// in robot_status under CAM_ROBOT_ID (same table/pattern this board
-// uses for itself in pushRobotStatus() — no wired link between the two
-// boards, so this row is the only signal available). Returns false —
-// "treat as absent" — on a missing row, an explicit online=false, or
-// any request/parse failure, so a flaky read never gets mistaken for a
-// present camera.
+// Asks Supabase whether the ESP32-CAM is both (a) last reported online
+// AND (b) heartbeated recently enough to trust — via the
+// public.is_camera_online() RPC rather than reading the "online" column
+// directly. Freshness is judged by Postgres's own now() against
+// robot_status.updated_at (auto-refreshed by a DB trigger on every
+// heartbeat upsert), NOT by this board comparing timestamps itself —
+// this board has no RTC/NTP, so any on-device "is this timestamp too
+// old" comparison would be unreliable. Pushing that comparison
+// server-side means a stale-but-still-"online" row (e.g. the camera
+// lost power without a clean disconnect) is correctly caught, instead
+// of only catching an explicit online=false.
 //
-// Note: this checks the *last reported* online flag, not true
-// heartbeat freshness — the ESP32-CAM only ever writes online=true
-// while it's running, so a clean reboot/reconnect updates it quickly,
-// but a hard power loss can leave a stale "online" row until the
-// camera comes back and either updates it or a server-side job (e.g. a
-// Supabase cron/edge function marking rows stale after N seconds of no
-// update) flips it to false. This board has no NTP/RTC to safely
-// compare wall-clock ages itself, so if you need stricter staleness
-// detection, add that check on the Supabase side rather than here.
+// Returns false — "treat as absent" — on no WiFi, a missing row, a
+// stale row, an explicit online=false, or any request/parse failure,
+// so a flaky read never gets mistaken for a present camera.
 bool isCameraOnline() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
-  String url = String(SUPABASE_URL) + "/rest/v1/robot_status?robot_id=eq." +
-               CAM_ROBOT_ID + "&select=online&limit=1";
+  StaticJsonDocument<96> reqDoc;
+  reqDoc["p_robot_id"] = CAM_ROBOT_ID;
+  reqDoc["p_max_age_seconds"] = CAMERA_HEARTBEAT_MAX_AGE_S;
+  String reqPayload; serializeJson(reqDoc, reqPayload);
+
+  String url = String(SUPABASE_URL) + "/rest/v1/rpc/is_camera_online";
   HTTPClient http;
   if (!http.begin(url)) return false;
   addHeaders(http);
-  int code = http.GET();
+  int code = http.POST(reqPayload);
   bool online = false;
   if (code == 200) {
-    DynamicJsonDocument doc(256);
-    if (!deserializeJson(doc, http.getString())) {
-      JsonArray arr = doc.as<JsonArray>();
-      if (arr.size() > 0) online = arr[0]["online"] | false;
-    }
+    String resp = http.getString();
+    resp.trim();
+    online = (resp == "true");  // RPC returns a bare JSON boolean body
   }
   http.end();
   return online;
