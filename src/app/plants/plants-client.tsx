@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge } from "@/components/ui-kit";
 import ComingSoon from "@/components/coming-soon";
 import { PlantsMapLoader } from "@/components/plants-map-loader";
 import type { PlantLocation, SensorReading } from "@/lib/types";
-import { MapPin, Droplets, Navigation, ExternalLink } from "lucide-react";
+import { MapPin, Droplets, Navigation, ExternalLink, History } from "lucide-react";
 
 const ROBOT_ID = "agribot-01";
 
@@ -181,6 +182,13 @@ function PlantRow({
       >
         <ExternalLink className="h-4 w-4" />
       </a>
+      <Link
+        href={`/plants/${plant.plant_index}`}
+        className="shrink-0 text-muted dark:text-gray-400"
+        aria-label="View plant history"
+      >
+        <History className="h-4 w-4" />
+      </Link>
     </Card>
   );
 }
@@ -194,4 +202,4 @@ function Legend({ color, label }: { color: string; label: string }) {
   );
 }
 
-                                           
+
