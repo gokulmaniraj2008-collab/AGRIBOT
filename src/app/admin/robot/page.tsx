@@ -15,6 +15,7 @@ export default function AdminRobotPage() {
   const [latest, setLatest] = useState<SensorReading | null>(null);
   const [commands, setCommands] = useState<RobotCommandRow[]>([]);
   const [totalCommandCount, setTotalCommandCount] = useState<number | null>(null);
+  const [totalReadingCount, setTotalReadingCount] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -42,12 +43,16 @@ export default function AdminRobotPage() {
       supabase
         .from("robot_commands")
         .select("id", { count: "exact", head: true }),
-    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }]) => {
+      supabase
+        .from("sensor_data")
+        .select("id", { count: "exact", head: true }),
+    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }]) => {
       if (cancelled) return;
       if (statusRow) setStatus(statusRow);
       if (sensorRow) setLatest(sensorRow);
       if (commandRows) setCommands(commandRows);
       if (count != null) setTotalCommandCount(count);
+      if (readingTotal != null) setTotalReadingCount(readingTotal);
     });
     return () => {
       cancelled = true;
@@ -56,7 +61,7 @@ export default function AdminRobotPage() {
 
   async function refresh() {
     setBusy("refresh");
-    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }] = await Promise.all([
+    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }] = await Promise.all([
       supabase
         .from("robot_status")
         .select("*")
@@ -77,11 +82,15 @@ export default function AdminRobotPage() {
       supabase
         .from("robot_commands")
         .select("id", { count: "exact", head: true }),
+      supabase
+        .from("sensor_data")
+        .select("id", { count: "exact", head: true }),
     ]);
     if (data) setStatus(data);
     if (sensorRow) setLatest(sensorRow);
     if (commandRows) setCommands(commandRows);
     if (count != null) setTotalCommandCount(count);
+    if (readingTotal != null) setTotalReadingCount(readingTotal);
     setBusy(null);
   }
 
@@ -179,6 +188,30 @@ export default function AdminRobotPage() {
     setBusy(null);
   }
 
+  async function clearAllReadings() {
+    setBusy("readings");
+    setError(null);
+    setNote(null);
+    const { data, error: err } = await supabase
+      .from("sensor_data")
+      .delete()
+      .not("id", "is", null) // delete-all guard: Supabase requires a filter on delete
+      .select();
+    if (err) {
+      setError(err.message);
+    } else {
+      const deletedCount = data?.length ?? 0;
+      setLatest(null);
+      setTotalReadingCount(0);
+      if (deletedCount === 0) {
+        setNote("No sensor readings to clear — the table is already empty.");
+      } else {
+        setNote(`Cleared ${deletedCount} sensor reading${deletedCount === 1 ? "" : "s"}.`);
+      }
+    }
+    setBusy(null);
+  }
+
   const isOnline = status?.online ?? false;
   const isStale =
     status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
@@ -269,11 +302,24 @@ export default function AdminRobotPage() {
         </Card>
 
         <Card className="mt-4 p-4">
-          <div className="mb-3 flex items-center gap-2.5">
-            <IconTile icon={Database} size={32} />
-            <span className="text-sm font-semibold text-foreground dark:text-gray-100">
-              Latest Sensor Reading
+          <div className="mb-3 flex items-center justify-between gap-2.5">
+            <span className="flex items-center gap-2.5">
+              <IconTile icon={Database} size={32} />
+              <span className="text-sm font-semibold text-foreground dark:text-gray-100">
+                Latest Sensor Reading
+              </span>
             </span>
+            <button
+              onClick={clearAllReadings}
+              disabled={busy === "readings" || !totalReadingCount}
+              className="shrink-0 rounded-lg border border-border bg-white px-2.5 py-1.5 text-[11px] font-semibold text-foreground transition hover:bg-background disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+            >
+              {busy === "readings"
+                ? "Clearing…"
+                : !totalReadingCount
+                ? "No readings"
+                : `Clear all (${totalReadingCount})`}
+            </button>
           </div>
           {!latest ? (
             <p className="text-xs text-muted dark:text-gray-400">No readings yet.</p>
@@ -348,5 +394,4 @@ export default function AdminRobotPage() {
       </>
     </DashboardShell>
   );
-        }
-
+}
