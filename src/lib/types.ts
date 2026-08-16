@@ -23,6 +23,10 @@ export type RobotStatus = {
   speed_value: number;
   irrigation_auto: boolean;
   irrigation_threshold: number;
+  gps_fix: boolean;
+  gps_satellites: number | null;
+  last_latitude: number | null;
+  last_longitude: number | null;
 };
 
 export type RobotCommand =
