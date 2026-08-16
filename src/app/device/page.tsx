@@ -549,7 +549,53 @@ export default function DevicePage() {
           </Card>
         </div>
 
-        {/* Message log */}
+                {/* Message log */}
         <div className="mt-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
-         
+            Message Log
+          </p>
+          <div className="flex flex-col gap-2">
+            {messages.length === 0 && (
+              <Card className="p-4">
+                <p className="text-center text-sm text-muted dark:text-gray-400">No messages yet.</p>
+              </Card>
+            )}
+            {messages.map((m) => {
+              const style = LEVEL_STYLE[m.level];
+              const Icon = style.icon;
+              const fromEsp32 = m.origin === "esp32";
+              return (
+                <Card key={m.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                      style={{ backgroundColor: `${style.color}1a`, color: style.color }}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted dark:text-gray-400">
+                        {fromEsp32 ? <Cpu className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+                        {fromEsp32 ? "ESP32" : "Website"}
+                        <span className="text-muted/50 dark:text-gray-600">
+                          · {timeAgo(m.created_at, now)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-sm text-foreground dark:text-gray-100">{m.message}</p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted dark:text-gray-500">
+          <MessageSquare className="h-3 w-3" />
+          All data updates live — no refresh needed.
+        </p>
+      </>
+    </DashboardShell>
+  );
+         }
+      
