@@ -101,8 +101,28 @@ export function PlantsMap({
       {robot && (
         <Marker position={[robot.latitude, robot.longitude]} icon={robotPinIcon(robot.online)}>
           <Popup>
-            <p className="text-xs font-semibold text-foreground">AgriBot AI — Unit 01</p>
-            <p className="text-xs text-muted">{robot.online ? "Online" : "Offline"}</p>
+            <div className="min-w-[160px]">
+              <p className="text-xs font-semibold text-foreground">AgriBot AI — Unit 01</p>
+              <p className="text-xs text-muted">{robot.online ? "Online" : "Offline"}</p>
+              <div className="mt-2 flex gap-2">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${robot.latitude},${robot.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-medium text-indigo-600 underline"
+                >
+                  Directions
+                </a>
+                <a
+                  href={`https://www.google.com/maps?q=${robot.latitude},${robot.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-medium text-primary underline"
+                >
+                  Open in Maps
+                </a>
+              </div>
+            </div>
           </Popup>
         </Marker>
       )}
@@ -137,4 +157,4 @@ export function PlantsMap({
       ))}
     </MapContainer>
   );
-  }
+}
