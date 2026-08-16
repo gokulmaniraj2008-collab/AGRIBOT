@@ -20,6 +20,10 @@ const VALID_COMMANDS: RobotCommand[] = [
   "save_plant_location",
   "goto_plant",
   "goto_and_water_all",
+  "camera_check",
+  "start_mission",
+  "cancel_mission",
+  "safety_reset",
 ];
 
 export async function POST(request: NextRequest) {
@@ -121,8 +125,19 @@ function describeCommand(command: string, value: number | null): string {
       return `Sent command: save current GPS spot as plant ${value ?? "?"}`;
     case "goto_plant":
       return `Sent command: go to plant ${value ?? "?"}`;
+    case "goto_and_water_all":
+      return "Sent command: go to and water every saved plant";
+    case "camera_check":
+      return "Sent command: camera check";
+    case "start_mission":
+      return `Sent command: start mission (${value ?? "?"} plant(s))`;
+    case "cancel_mission":
+      return `Sent command: cancel mission #${value ?? "?"}`;
+    case "safety_reset":
+      return "Sent command: safety reset — AUTO and new missions re-enabled";
     default:
       return `Sent command: ${command}${value != null ? ` (${value})` : ""}`;
   }
 }
 
+    
