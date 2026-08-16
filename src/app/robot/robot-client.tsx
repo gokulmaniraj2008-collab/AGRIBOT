@@ -508,6 +508,24 @@ export default function RobotClient({
             Stand the robot at a plant, then save its GPS fix as that plant&apos;s number. Re-saving the
             same number overwrites its old spot.
           </p>
+
+          <div className="mt-3 flex items-center gap-1.5 text-xs">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                status?.gps_fix ? "bg-green-500" : "bg-gray-400"
+              }`}
+            />
+            {status?.gps_fix ? (
+              <span className="text-green-700 dark:text-green-400">
+                GPS locked{status.gps_satellites ? ` · ${status.gps_satellites} satellites` : ""}
+              </span>
+            ) : (
+              <span className="text-muted dark:text-gray-400">
+                No GPS fix yet — go outside and wait, then Save Location will work
+              </span>
+            )}
+          </div>
+
           <div className="mt-3 flex items-center gap-2">
             <input
               type="number"
@@ -521,8 +539,8 @@ export default function RobotClient({
             <span className="text-xs text-muted dark:text-gray-400">plant #</span>
             <button
               onClick={saveLocation}
-              disabled={sending === "save_plant_location"}
-              className="ml-auto rounded-full px-4 py-1.5 text-xs font-medium text-white shadow-sm transition disabled:opacity-60"
+              disabled={sending === "save_plant_location" || !status?.gps_fix}
+              className="ml-auto rounded-full px-4 py-1.5 text-xs font-medium text-white shadow-sm transition disabled:opacity-40"
               style={{ backgroundColor: SECTION_TINTS.irrigation }}
             >
               {sending === "save_plant_location" ? "Saving…" : "Save Location"}
