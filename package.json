@@ -11,6 +11,8 @@
   "dependencies": {
     "@supabase/ssr": "0.5.2",
     "@supabase/supabase-js": "^2.111.0",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^5.0.0",
     "lucide-react": "0.469.0",
     "next": "^15.5.22",
     "react": "19.0.0",
@@ -21,6 +23,7 @@
     "@types/node": "22.10.5",
     "@types/react": "19.0.4",
     "@types/react-dom": "19.0.2",
+    "@types/leaflet": "^1.9.21",
     "autoprefixer": "10.4.20",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.1.6",
