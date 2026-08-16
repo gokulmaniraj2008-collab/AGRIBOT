@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge, IconTile } from "@/components/ui-kit";
-import type { RobotStatus, SensorReading, RobotCommandRow, Mission } from "@/lib/types";
-import { Power, RefreshCw, ArrowLeft, Database, ListChecks, Trash2 } from "lucide-react";
+import type { RobotStatus, SensorReading, RobotCommandRow, Mission, RobotLog } from "@/lib/types";
+import { Power, RefreshCw, ArrowLeft, Database, ListChecks, Trash2, FileText } from "lucide-react";
 
 export default function AdminRobotPage() {
   const supabase = createClient();
@@ -17,6 +17,8 @@ export default function AdminRobotPage() {
   const [totalCommandCount, setTotalCommandCount] = useState<number | null>(null);
   const [totalReadingCount, setTotalReadingCount] = useState<number | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [logs, setLogs] = useState<RobotLog[]>([]);
+  const [totalLogCount, setTotalLogCount] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -53,7 +55,16 @@ export default function AdminRobotPage() {
         .order("started_at", { ascending: false })
         .limit(10)
         .returns<Mission[]>(),
-    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }, { data: missionRows }]) => {
+      supabase
+        .from("robot_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .returns<RobotLog[]>(),
+      supabase
+        .from("robot_logs")
+        .select("id", { count: "exact", head: true }),
+    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }, { data: missionRows }, { data: logRows }, { count: logTotal }]) => {
       if (cancelled) return;
       if (statusRow) setStatus(statusRow);
       if (sensorRow) setLatest(sensorRow);
@@ -61,6 +72,8 @@ export default function AdminRobotPage() {
       if (count != null) setTotalCommandCount(count);
       if (readingTotal != null) setTotalReadingCount(readingTotal);
       if (missionRows) setMissions(missionRows);
+      if (logRows) setLogs(logRows);
+      if (logTotal != null) setTotalLogCount(logTotal);
     });
     return () => {
       cancelled = true;
@@ -69,7 +82,7 @@ export default function AdminRobotPage() {
 
   async function refresh() {
     setBusy("refresh");
-    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }, { data: missionRows }] = await Promise.all([
+    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }, { data: missionRows }, { data: logRows }, { count: logTotal }] = await Promise.all([
       supabase
         .from("robot_status")
         .select("*")
@@ -99,6 +112,15 @@ export default function AdminRobotPage() {
         .order("started_at", { ascending: false })
         .limit(10)
         .returns<Mission[]>(),
+      supabase
+        .from("robot_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .returns<RobotLog[]>(),
+      supabase
+        .from("robot_logs")
+        .select("id", { count: "exact", head: true }),
     ]);
     if (data) setStatus(data);
     if (sensorRow) setLatest(sensorRow);
@@ -106,6 +128,8 @@ export default function AdminRobotPage() {
     if (count != null) setTotalCommandCount(count);
     if (readingTotal != null) setTotalReadingCount(readingTotal);
     if (missionRows) setMissions(missionRows);
+    if (logRows) setLogs(logRows);
+    if (logTotal != null) setTotalLogCount(logTotal);
     setBusy(null);
   }
 
@@ -267,7 +291,31 @@ export default function AdminRobotPage() {
     setBusy(null);
   }
 
-const isOnline = status?.online ?? false;
+  async function clearAllLogs() {
+    setBusy("logs");
+    setError(null);
+    setNote(null);
+    const { data, error: err } = await supabase
+      .from("robot_logs")
+      .delete()
+      .not("id", "is", null) // delete-all guard: Supabase requires a filter on delete
+      .select();
+    if (err) {
+      setError(err.message);
+    } else {
+      const deletedCount = data?.length ?? 0;
+      setLogs([]);
+      setTotalLogCount(0);
+      if (deletedCount === 0) {
+        setNote("No logs to clear — the list is already empty.");
+      } else {
+        setNote(`Cleared ${deletedCount} log${deletedCount === 1 ? "" : "s"}.`);
+      }
+    }
+    setBusy(null);
+  }
+
+  const isOnline = status?.online ?? false;
   const isStale =
     status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
   const active = isOnline && !isStale;
@@ -475,6 +523,51 @@ const isOnline = status?.online ?? false;
         </Card>
 
         <Card className="mt-4 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2.5">
+            <span className="flex items-center gap-2.5">
+              <IconTile icon={FileText} size={32} />
+              <span className="text-sm font-semibold text-foreground dark:text-gray-100">
+                Robot Logs
+              </span>
+            </span>
+            <button
+              onClick={clearAllLogs}
+              disabled={busy === "logs" || !totalLogCount}
+              className="shrink-0 rounded-lg border border-border bg-white px-2.5 py-1.5 text-[11px] font-semibold text-foreground transition hover:bg-background disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+            >
+              {busy === "logs"
+                ? "Clearing…"
+                : !totalLogCount
+                ? "No logs"
+                : `Clear all (${totalLogCount})`}
+            </button>
+          </div>
+          {logs.length === 0 ? (
+            <p className="text-xs text-muted dark:text-gray-400">No logs yet.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-border dark:divide-gray-800">
+              {logs.map((l) => (
+                <div key={l.id} className="py-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground dark:text-gray-100">
+                      {l.event_type}
+                    </span>
+                    {l.value != null && (
+                      <span className="text-muted dark:text-gray-400">{l.value}</span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-muted dark:text-gray-400">{l.message}</p>
+                  <div className="mt-0.5 text-muted dark:text-gray-400">
+                    {new Date(l.created_at).toLocaleString()}
+                    {l.plant_id != null && ` · Plant #${l.plant_id}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="mt-4 p-4">
           <div className="mb-3 flex items-center gap-2.5">
             <IconTile icon={ListChecks} size={32} />
             <span className="text-sm font-semibold text-foreground dark:text-gray-100">
@@ -510,4 +603,4 @@ const isOnline = status?.online ?? false;
       </>
     </DashboardShell>
   );
-                  }
+}
