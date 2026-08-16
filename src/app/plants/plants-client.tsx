@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge } from "@/components/ui-kit";
 import ComingSoon from "@/components/coming-soon";
+import { PlantsMapLoader } from "@/components/plants-map-loader";
 import type { PlantLocation, SensorReading } from "@/lib/types";
 import { MapPin, Droplets, Navigation, ExternalLink } from "lucide-react";
 
@@ -89,27 +90,6 @@ export default function PlantsClient() {
     }
   }, []);
 
-  // Proportional lat/lng -> percentage position within the map box, so
-  // real spacing between plants is reflected (not just an arbitrary grid).
-  const positioned = useMemo(() => {
-    if (plants.length === 0) return [];
-    const lats = plants.map((p) => p.latitude);
-    const lngs = plants.map((p) => p.longitude);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-    const latSpan = maxLat - minLat || 0.0001;
-    const lngSpan = maxLng - minLng || 0.0001;
-    const pad = 14; // percent padding so pins near edges aren't clipped
-
-    return plants.map((p) => {
-      const xRaw = ((p.longitude - minLng) / lngSpan) * 100;
-      const yRaw = (1 - (p.latitude - minLat) / latSpan) * 100; // invert so north is up
-      const x = pad + (xRaw * (100 - 2 * pad)) / 100;
-      const y = pad + (yRaw * (100 - 2 * pad)) / 100;
-      return { ...p, x, y };
-    });
-  }, [plants]);
-
   if (!loading && plants.length === 0) {
     return (
       <DashboardShell title="Plant Locations" subtitle={ROBOT_ID}>
@@ -124,12 +104,9 @@ export default function PlantsClient() {
 
   return (
     <DashboardShell title="Plant Locations" subtitle={`${plants.length} saved · ${ROBOT_ID}`}>
-      <Card className="overflow-hidden">
-        <div className="relative aspect-square w-full bg-gradient-to-br from-primary/10 via-primary/5 to-transparent">
-          <PlotGrid className="absolute inset-0 h-full w-full opacity-60" />
-          {positioned.map((p) => (
-            <PlantPin key={p.id} plant={p} />
-          ))}
+      <Card className="overflow-hidden p-0">
+        <div className="h-[340px] w-full">
+          <PlantsMapLoader plants={plants} onWater={waterNow} sendingIndex={sending} />
         </div>
         <div className="flex items-center justify-center gap-4 border-t border-border px-3 py-2 text-[11px] text-muted dark:border-gray-800 dark:text-gray-400">
           <Legend color="#16a34a" label="Wet" />
@@ -153,32 +130,6 @@ function moistureColor(soil: number | null) {
   if (soil < 30) return "#dc2626";
   if (soil < 55) return "#d97706";
   return "#16a34a";
-}
-
-function PlantPin({ plant }: { plant: PlantWithReading & { x: number; y: number } }) {
-  const color = moistureColor(plant.soilMoisture);
-  return (
-    <a
-      href={`https://www.google.com/maps?q=${plant.latitude},${plant.longitude}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
-      style={{ left: `${plant.x}%`, top: `${plant.y}%` }}
-    >
-      <span className="mb-0.5 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-foreground shadow-sm dark:bg-gray-900/95 dark:text-gray-100">
-        {plant.soilMoisture != null ? `${plant.soilMoisture.toFixed(0)}%` : "—"}
-      </span>
-      <span
-        className="flex h-7 w-7 items-center justify-center rounded-full text-white shadow-md ring-2 ring-white/70 transition group-active:scale-90 dark:ring-gray-900/60"
-        style={{ backgroundColor: color }}
-      >
-        <MapPin className="h-3.5 w-3.5" />
-      </span>
-      <span className="mt-0.5 text-[9px] font-bold text-foreground/70 dark:text-gray-400">
-        #{plant.plant_index}
-      </span>
-    </a>
-  );
 }
 
 function PlantRow({
@@ -243,18 +194,4 @@ function Legend({ color, label }: { color: string; label: string }) {
   );
 }
 
-/** Same zero-dependency stylized grid used on the Field page — keeps the
- * two map-ish surfaces visually consistent without pulling in a map SDK. */
-function PlotGrid({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 300 300" preserveAspectRatio="none" className={className} aria-hidden="true">
-      {Array.from({ length: 10 }).map((_, i) => (
-        <line key={`v${i}`} x1={i * 30} y1="0" x2={i * 30} y2="300" stroke="currentColor" strokeOpacity="0.15" className="text-primary" />
-      ))}
-      {Array.from({ length: 10 }).map((_, i) => (
-        <line key={`h${i}`} x1="0" y1={i * 30} x2="300" y2={i * 30} stroke="currentColor" strokeOpacity="0.1" className="text-primary" />
-      ))}
-    </svg>
-  );
-      }
-      
+                                           
