@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { RobotStatus, SensorReading } from "@/lib/types";
+import type { RobotStatus, SensorReading, Mission, MissionPlant } from "@/lib/types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { StatusBadge } from "@/components/ui-kit";
 import {
@@ -22,6 +22,9 @@ import {
   Zap,
   Compass,
   Home,
+  ListChecks,
+  ShieldAlert,
+  XCircle,
 } from "lucide-react";
 
 const SECTION_TINTS: Record<string, string> = {
@@ -30,6 +33,7 @@ const SECTION_TINTS: Record<string, string> = {
   control: "#0ea5e9",
   pump: "#0891b2",
   irrigation: "#0ea5e9",
+  mission: "#d97706",
 };
 
 function tint(color: string) {
@@ -47,6 +51,8 @@ export default function RobotClient({
   const [status, setStatus] = useState<RobotStatus | null>(initialStatus);
   const [latest, setLatest] = useState<SensorReading | null>(initialLatest);
   const [sending, setSending] = useState<string | null>(null);
+  const [mission, setMission] = useState<Mission | null>(null);
+  const [missionPlants, setMissionPlants] = useState<MissionPlant[]>([]);
   // Optimistic mode: flips the button instantly on tap so it doesn't feel
   // laggy. Cleared as soon as the real status row confirms the switch, or
   // after a timeout if the robot never confirms (e.g. it's offline).
@@ -112,6 +118,93 @@ export default function RobotClient({
     };
   }, [supabase]);
 
+  // Most recent mission (in progress or just finished) and its per-plant
+  // rows — this is the mission board, kept separate from the manual drive
+  // controls below so it works whether the mission was started from the
+  // Patrol Row button, AUTO mode, or another client entirely.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: missionRow } = await supabase
+        .from("missions")
+        .select("*")
+        .eq("robot_id", "agribot-01")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<Mission>();
+      if (cancelled) return;
+      if (missionRow) {
+        setMission(missionRow);
+        const { data: plantRows } = await supabase
+          .from("mission_plants")
+          .select("*")
+          .eq("mission_id", missionRow.id);
+        if (!cancelled && plantRows) setMissionPlants(plantRows as MissionPlant[]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("missions_changes_page")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "missions", filter: "robot_id=eq.agribot-01" },
+        (payload) => {
+          const row = payload.new as Mission;
+          // Only the most recent mission is tracked here — a new row
+          // replaces the board and clears the old mission's plant rows
+          // (the next mission_plants subscription push repopulates it).
+          setMission((prev) => (!prev || row.id === prev.id || row.started_at >= prev.started_at ? row : prev));
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!mission) return;
+    setMissionPlants([]);
+    const channel = supabase
+      .channel(`mission_plants_changes_${mission.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "mission_plants", filter: `mission_id=eq.${mission.id}` },
+        (payload) => {
+          const row = payload.new as MissionPlant;
+          setMissionPlants((prev) => {
+            const others = prev.filter((p) => p.id !== row.id);
+            return [...others, row];
+          });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, mission]);
+
+  const missionStats = mission
+    ? {
+        total: mission.total_plants,
+        watered: missionPlants.filter((p) => p.status === "watered").length,
+        skipped: missionPlants.filter((p) => p.status === "skipped" || p.status === "failed").length,
+        remaining: mission.total_plants - missionPlants.length,
+        completed: missionPlants.length,
+      }
+    : null;
+
+  // "Current plant" is the most recently updated row — the plant the
+  // robot last finished with, or is presently at.
+  const currentMissionPlant = missionPlants.length
+    ? [...missionPlants].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))[0]
+    : null;
+
   const sendCommand = useCallback(async (command: string, value?: number) => {
     setSending(command);
     try {
@@ -124,6 +217,15 @@ export default function RobotClient({
       setSending(null);
     }
   }, []);
+
+  const cancelMission = useCallback(() => {
+    if (!mission) return;
+    sendCommand("cancel_mission", mission.id);
+  }, [mission, sendCommand]);
+
+  const safetyReset = useCallback(() => {
+    sendCommand("safety_reset");
+  }, [sendCommand]);
 
   // AUTO mode now runs a continuous loop of full patrol laps on the
   // firmware side (see agribot_main.ino: runAutoPatrolCycle()), so
@@ -233,6 +335,119 @@ export default function RobotClient({
           <span className="text-xs font-medium text-muted">Detect → water → save →</span>
         </Link>
 
+        {status?.safety_stopped && (
+          <section className="mt-3 rounded-2xl border border-danger/30 bg-danger/10 p-4 shadow-sm">
+            <div className="flex items-start gap-2.5">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-danger">Safety stop latched</p>
+                <p className="mt-0.5 text-xs text-danger/80">
+                  {status.last_fault ?? "A safety fault was reported."} AUTO and new missions are
+                  blocked until this is cleared.
+                </p>
+                <button
+                  onClick={safetyReset}
+                  disabled={sending === "safety_reset"}
+                  className="mt-2.5 rounded-full bg-danger px-4 py-1.5 text-xs font-medium text-white shadow-sm transition disabled:opacity-60"
+                >
+                  {sending === "safety_reset" ? "Resetting…" : "Safety Reset"}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {mission && (
+          <section className="mt-3 rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.mission)}>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground dark:text-gray-100">
+                <ListChecks className="h-4 w-4" style={{ color: SECTION_TINTS.mission }} />
+                Mission #{mission.id}
+              </span>
+              <StatusBadge
+                label={
+                  mission.status === "in_progress"
+                    ? "Patrolling"
+                    : mission.status === "completed"
+                    ? "Completed"
+                    : mission.status === "stopped"
+                    ? "Stopped"
+                    : "Failed"
+                }
+                tone={
+                  mission.status === "in_progress"
+                    ? "info"
+                    : mission.status === "completed"
+                    ? "success"
+                    : mission.status === "stopped"
+                    ? "warning"
+                    : "danger"
+                }
+              />
+            </div>
+
+            {mission.stop_reason && (
+              <p className="mt-1 text-xs text-muted dark:text-gray-400">
+                Reason: {mission.stop_reason.replace(/_/g, " ")}
+              </p>
+            )}
+
+            <div className="mt-3 grid grid-cols-2 gap-2.5 text-sm sm:grid-cols-4">
+              <MissionStat label="Plants" value={missionStats!.total} />
+              <MissionStat label="Completed" value={missionStats!.completed} />
+              <MissionStat label="Watered" value={missionStats!.watered} />
+              <MissionStat label="Skipped" value={missionStats!.skipped} />
+            </div>
+            <div className="mt-2.5">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/60 dark:bg-gray-800">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, (missionStats!.completed / Math.max(1, missionStats!.total)) * 100)}%`,
+                    backgroundColor: SECTION_TINTS.mission,
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-muted dark:text-gray-400">
+                {missionStats!.remaining} remaining
+              </p>
+            </div>
+
+            {currentMissionPlant && (
+              <div className="mt-3 rounded-xl bg-white/70 px-3 py-2.5 text-xs dark:bg-gray-900/50">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground dark:text-gray-100">
+                    Plant #{currentMissionPlant.plant_index}
+                  </span>
+                  <span className="text-muted dark:text-gray-400">
+                    {currentMissionPlant.status}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-3 text-muted dark:text-gray-400">
+                  <span>
+                    Soil: {currentMissionPlant.soil_moisture != null ? `${currentMissionPlant.soil_moisture}%` : "—"}
+                  </span>
+                  <span>
+                    {currentMissionPlant.watered
+                      ? `Watered${currentMissionPlant.water_duration_s != null ? ` · ${currentMissionPlant.water_duration_s}s` : ""}`
+                      : "Not watered"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {mission.status === "in_progress" && (
+              <button
+                onClick={cancelMission}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-full bg-white py-2 text-xs font-medium text-danger shadow-sm transition dark:bg-gray-900"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Cancel Mission
+              </button>
+            )}
+          </section>
+        )}
+
         <section className="rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.status)}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -287,8 +502,7 @@ export default function RobotClient({
             />
           </div>
         </section>
-
-        {/* Telemetry — every value below comes from a real column on robot_status / sensor_data */}
+      {/* Telemetry — every value below comes from a real column on robot_status / sensor_data */}
         <section className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
             Telemetry
@@ -602,6 +816,15 @@ function ToggleButton({
       {icon}
       {label} {on ? "· On" : "· Off"}
     </button>
+  );
+}
+
+function MissionStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl bg-white/70 px-3 py-2 text-center dark:bg-gray-900/50">
+      <p className="text-base font-semibold text-foreground dark:text-gray-100">{value}</p>
+      <p className="text-[11px] text-muted dark:text-gray-400">{label}</p>
+    </div>
   );
 }
 
