@@ -70,24 +70,28 @@ export default function AdminPage() {
     <DashboardShell title="Admin Panel" subtitle="Manage robot, data & users" isAdmin>
       <>
         <div className="grid grid-cols-2 gap-3">
-          <Card className="p-3.5">
-            <div className="flex items-center gap-1.5 text-muted dark:text-gray-400">
-              <Database className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Sensor Readings</span>
-            </div>
-            <div className="mt-1.5 text-xl font-bold text-foreground dark:text-gray-100">
-              {readingCount != null ? readingCount.toLocaleString() : "—"}
-            </div>
-          </Card>
-          <Card className="p-3.5">
-            <div className="flex items-center gap-1.5 text-muted dark:text-gray-400">
-              <ListChecks className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Pending Commands</span>
-            </div>
-            <div className="mt-1.5 text-xl font-bold text-foreground dark:text-gray-100">
-              {pendingCount != null ? pendingCount.toLocaleString() : "—"}
-            </div>
-          </Card>
+          <Link href="/analytics">
+            <Card className="p-3.5 transition active:scale-[0.98]">
+              <div className="flex items-center gap-1.5 text-muted dark:text-gray-400">
+                <Database className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Sensor Readings</span>
+              </div>
+              <div className="mt-1.5 text-xl font-bold text-foreground dark:text-gray-100">
+                {readingCount != null ? readingCount.toLocaleString() : "—"}
+              </div>
+            </Card>
+          </Link>
+          <Link href="/admin/robot">
+            <Card className="p-3.5 transition active:scale-[0.98]">
+              <div className="flex items-center gap-1.5 text-muted dark:text-gray-400">
+                <ListChecks className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Pending Commands</span>
+              </div>
+              <div className="mt-1.5 text-xl font-bold text-foreground dark:text-gray-100">
+                {pendingCount != null ? pendingCount.toLocaleString() : "—"}
+              </div>
+            </Card>
+          </Link>
         </div>
 
         <div className="mt-6">
@@ -113,4 +117,5 @@ export default function AdminPage() {
     </DashboardShell>
   );
      }
-      
+
+    
