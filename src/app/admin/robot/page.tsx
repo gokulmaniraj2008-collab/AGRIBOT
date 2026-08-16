@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge, IconTile } from "@/components/ui-kit";
-import type { RobotStatus, SensorReading, RobotCommandRow } from "@/lib/types";
-import { Power, RefreshCw, ArrowLeft, Database, ListChecks } from "lucide-react";
+import type { RobotStatus, SensorReading, RobotCommandRow, Mission } from "@/lib/types";
+import { Power, RefreshCw, ArrowLeft, Database, ListChecks, Trash2 } from "lucide-react";
 
 export default function AdminRobotPage() {
   const supabase = createClient();
@@ -16,6 +16,7 @@ export default function AdminRobotPage() {
   const [commands, setCommands] = useState<RobotCommandRow[]>([]);
   const [totalCommandCount, setTotalCommandCount] = useState<number | null>(null);
   const [totalReadingCount, setTotalReadingCount] = useState<number | null>(null);
+  const [missions, setMissions] = useState<Mission[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -46,13 +47,20 @@ export default function AdminRobotPage() {
       supabase
         .from("sensor_data")
         .select("id", { count: "exact", head: true }),
-    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }]) => {
+      supabase
+        .from("missions")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(10)
+        .returns<Mission[]>(),
+    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }, { data: missionRows }]) => {
       if (cancelled) return;
       if (statusRow) setStatus(statusRow);
       if (sensorRow) setLatest(sensorRow);
       if (commandRows) setCommands(commandRows);
       if (count != null) setTotalCommandCount(count);
       if (readingTotal != null) setTotalReadingCount(readingTotal);
+      if (missionRows) setMissions(missionRows);
     });
     return () => {
       cancelled = true;
@@ -61,7 +69,7 @@ export default function AdminRobotPage() {
 
   async function refresh() {
     setBusy("refresh");
-    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }] = await Promise.all([
+    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }, { count: readingTotal }, { data: missionRows }] = await Promise.all([
       supabase
         .from("robot_status")
         .select("*")
@@ -85,12 +93,59 @@ export default function AdminRobotPage() {
       supabase
         .from("sensor_data")
         .select("id", { count: "exact", head: true }),
+      supabase
+        .from("missions")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(10)
+        .returns<Mission[]>(),
     ]);
     if (data) setStatus(data);
     if (sensorRow) setLatest(sensorRow);
     if (commandRows) setCommands(commandRows);
     if (count != null) setTotalCommandCount(count);
     if (readingTotal != null) setTotalReadingCount(readingTotal);
+    if (missionRows) setMissions(missionRows);
+    setBusy(null);
+  }
+
+  async function deleteMission(id: number) {
+    setBusy(`mission-${id}`);
+    setError(null);
+    setNote(null);
+
+    // Clear the pointer first if this mission is the robot's "current"
+    // one, otherwise the missions delete would be blocked (or leave a
+    // dangling reference) by the robot_status FK.
+    if (status?.current_mission_id === id) {
+      const { error: statusErr } = await supabase
+        .from("robot_status")
+        .update({ current_mission_id: null })
+        .eq("robot_id", "agribot-01");
+      if (statusErr) {
+        setError(statusErr.message);
+        setBusy(null);
+        return;
+      }
+      setStatus((prev) => (prev ? { ...prev, current_mission_id: null } : prev));
+    }
+
+    const { error: plantsErr } = await supabase.from("mission_plants").delete().eq("mission_id", id);
+    if (plantsErr) {
+      setError(plantsErr.message);
+      setBusy(null);
+      return;
+    }
+
+    const { error: missionErr } = await supabase.from("missions").delete().eq("id", id);
+    if (missionErr) {
+      setError(missionErr.message);
+      setBusy(null);
+      return;
+    }
+
+    setMissions((prev) => prev.filter((m) => m.id !== id));
+    setNote(`Mission #${id} deleted.`);
     setBusy(null);
   }
 
@@ -212,7 +267,7 @@ export default function AdminRobotPage() {
     setBusy(null);
   }
 
-  const isOnline = status?.online ?? false;
+const isOnline = status?.online ?? false;
   const isStale =
     status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
   const active = isOnline && !isStale;
@@ -362,6 +417,67 @@ export default function AdminRobotPage() {
           <div className="mb-3 flex items-center gap-2.5">
             <IconTile icon={ListChecks} size={32} />
             <span className="text-sm font-semibold text-foreground dark:text-gray-100">
+              Missions
+            </span>
+          </div>
+          {missions.length === 0 ? (
+            <p className="text-xs text-muted dark:text-gray-400">No missions yet.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-border dark:divide-gray-800">
+              {missions.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-2 py-3 text-xs">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-foreground dark:text-gray-100">
+                      Mission #{m.id}
+                    </span>
+                    <span className="text-muted dark:text-gray-400"> · {m.total_plants} plants</span>
+                    {m.stop_reason && (
+                      <span className="text-muted dark:text-gray-400"> · {m.stop_reason.replace(/_/g, " ")}</span>
+                    )}
+                    <div className="mt-0.5 text-muted dark:text-gray-400">
+                      {new Date(m.started_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <StatusBadge
+                      label={
+                        m.status === "in_progress"
+                          ? "Patrolling"
+                          : m.status === "completed"
+                          ? "Completed"
+                          : m.status === "stopped"
+                          ? "Stopped"
+                          : "Failed"
+                      }
+                      tone={
+                        m.status === "in_progress"
+                          ? "info"
+                          : m.status === "completed"
+                          ? "success"
+                          : m.status === "stopped"
+                          ? "warning"
+                          : "danger"
+                      }
+                    />
+                    <button
+                      onClick={() => deleteMission(m.id)}
+                      disabled={busy === `mission-${m.id}`}
+                      aria-label={`Delete mission ${m.id}`}
+                      className="rounded-lg border border-danger/30 bg-danger/5 p-1.5 text-danger transition hover:bg-danger/10 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="mt-4 p-4">
+          <div className="mb-3 flex items-center gap-2.5">
+            <IconTile icon={ListChecks} size={32} />
+            <span className="text-sm font-semibold text-foreground dark:text-gray-100">
               Recent Commands
             </span>
           </div>
@@ -394,4 +510,4 @@ export default function AdminRobotPage() {
       </>
     </DashboardShell>
   );
-}
+                  }
