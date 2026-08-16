@@ -29,6 +29,44 @@ export type RobotStatus = {
   last_longitude: number | null;
   camera_ip?: string | null; // set by agribot-01-cam's heartbeat only — the
                               // main agribot-01 row won't have this populated
+  current_mission_id: number | null;
+  safety_stopped: boolean;
+  last_fault: string | null;
+  last_fault_at: string | null;
+};
+
+export type Mission = {
+  id: number;
+  robot_id: string;
+  created_at: string;
+  started_at: string;
+  completed_at: string | null;
+  total_plants: number;
+  status: "in_progress" | "completed" | "stopped" | "failed";
+  stop_reason:
+    | "obstacle"
+    | "timeout"
+    | "camera_blocked"
+    | "hardware_error"
+    | "sensor_error"
+    | "cancelled"
+    | null;
+};
+
+export type MissionPlant = {
+  id: number;
+  mission_id: number;
+  robot_id: string;
+  plant_index: number;
+  created_at: string;
+  updated_at: string;
+  status: "pending" | "visited" | "watered" | "skipped" | "failed";
+  camera_verified: boolean;
+  known_plant: boolean;
+  soil_moisture: number | null;
+  watered: boolean;
+  water_duration_s: number | null;
+  failure_reason: string | null;
 };
 
 export type RobotCommand =
@@ -48,7 +86,11 @@ export type RobotCommand =
   | "patrol_row"
   | "save_plant_location"
   | "goto_plant"
-  | "goto_and_water_all";
+  | "goto_and_water_all"
+  | "camera_check"
+  | "start_mission"
+  | "cancel_mission"
+  | "safety_reset";
 
 export type PlantLocation = {
   id: number;
