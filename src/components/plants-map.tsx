@@ -36,18 +36,40 @@ function plantPinIcon(plant: PlantWithReading) {
   });
 }
 
-function FitToPlants({ plants }: { plants: PlantWithReading[] }) {
+function robotPinIcon(online: boolean) {
+  const color = online ? "#0ea5e9" : "#9ca3af";
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:30px;height:30px;border-radius:9999px;background:${color};
+      box-shadow:0 2px 8px rgba(0,0,0,0.35);border:3px solid white;
+      display:flex;align-items:center;justify-content:center;">
+      <span style="color:white;font:700 13px sans-serif;">R</span>
+    </div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+}
+
+function FitToPlants({
+  plants,
+  robot,
+}: {
+  plants: PlantWithReading[];
+  robot?: { latitude: number; longitude: number } | null;
+}) {
   const map = useMap();
   useMemo(() => {
-    if (plants.length === 0) return;
-    if (plants.length === 1) {
-      map.setView([plants[0].latitude, plants[0].longitude], 18);
+    const points: [number, number][] = plants.map((p) => [p.latitude, p.longitude]);
+    if (robot) points.push([robot.latitude, robot.longitude]);
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 18);
       return;
     }
-    const bounds = L.latLngBounds(plants.map((p) => [p.latitude, p.longitude] as [number, number]));
+    const bounds = L.latLngBounds(points);
     map.fitBounds(bounds, { padding: [40, 40] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plants.length]);
+  }, [plants.length, robot?.latitude, robot?.longitude]);
   return null;
 }
 
@@ -55,13 +77,19 @@ export function PlantsMap({
   plants,
   onWater,
   sendingIndex,
+  robot,
 }: {
   plants: PlantWithReading[];
   onWater: (plantIndex: number) => void;
   sendingIndex: number | null;
+  robot?: { latitude: number; longitude: number; online: boolean } | null;
 }) {
   const center: [number, number] =
-    plants.length > 0 ? [plants[0].latitude, plants[0].longitude] : [11.0168, 76.9558]; // Coimbatore fallback
+    plants.length > 0
+      ? [plants[0].latitude, plants[0].longitude]
+      : robot
+      ? [robot.latitude, robot.longitude]
+      : [11.0168, 76.9558]; // Coimbatore fallback
 
   return (
     <MapContainer center={center} zoom={17} scrollWheelZoom className="h-full w-full">
@@ -69,7 +97,15 @@ export function PlantsMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitToPlants plants={plants} />
+      <FitToPlants plants={plants} robot={robot} />
+      {robot && (
+        <Marker position={[robot.latitude, robot.longitude]} icon={robotPinIcon(robot.online)}>
+          <Popup>
+            <p className="text-xs font-semibold text-foreground">AgriBot AI — Unit 01</p>
+            <p className="text-xs text-muted">{robot.online ? "Online" : "Offline"}</p>
+          </Popup>
+        </Marker>
+      )}
       {plants.map((p) => (
         <Marker key={p.id} position={[p.latitude, p.longitude]} icon={plantPinIcon(p)}>
           <Popup>
@@ -101,4 +137,4 @@ export function PlantsMap({
       ))}
     </MapContainer>
   );
-    }
+  }
