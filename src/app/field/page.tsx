@@ -7,7 +7,7 @@ import { Card } from "@/components/ui-kit";
 import ComingSoon from "@/components/coming-soon";
 import { PlantsMapLoader } from "@/components/plants-map-loader";
 import type { RobotStatus, SensorReading, PlantLocation } from "@/lib/types";
-import { Map, MapPin, Gauge, Battery, Power, ChevronRight } from "lucide-react";
+import { Map as MapIcon, MapPin, Gauge, Battery, Power, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 const ROBOT_ID = "agribot-01";
@@ -157,7 +157,7 @@ export default function FieldPage() {
           </Card>
         ) : (
           <ComingSoon
-            icon={Map}
+            icon={MapIcon}
             title="Field map coming soon"
             description="Save at least one plant location, or get a GPS fix on the robot, and the map will appear here."
           />
@@ -207,4 +207,5 @@ function Legend({ color, label }: { color: string; label: string }) {
       {label}
     </span>
   );
-}
+    }
+            
