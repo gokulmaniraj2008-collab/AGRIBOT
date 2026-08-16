@@ -1,43 +1,113 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { Card } from "@/components/ui-kit";
 import ComingSoon from "@/components/coming-soon";
-import type { RobotStatus, SensorReading } from "@/lib/types";
+import { PlantsMapLoader } from "@/components/plants-map-loader";
+import type { RobotStatus, SensorReading, PlantLocation } from "@/lib/types";
 import { Map, MapPin, Gauge, Battery, Power, ChevronRight } from "lucide-react";
 import Link from "next/link";
+
+const ROBOT_ID = "agribot-01";
+
+type PlantWithReading = PlantLocation & {
+  soilMoisture: number | null;
+  readingAt: string | null;
+};
 
 export default function FieldPage() {
   const supabase = createClient();
   const [latest, setLatest] = useState<SensorReading | null>(null);
   const [status, setStatus] = useState<RobotStatus | null>(null);
+  const [plants, setPlants] = useState<PlantWithReading[]>([]);
+  const [sending, setSending] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      supabase
-        .from("sensor_data")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<SensorReading>(),
-      supabase
-        .from("robot_status")
-        .select("*")
-        .eq("robot_id", "agribot-01")
-        .single<RobotStatus>(),
-    ]).then(([{ data: latestRow }, { data: statusRow }]) => {
-      if (cancelled) return;
-      if (latestRow) setLatest(latestRow);
-      if (statusRow) setStatus(statusRow);
-    });
-    return () => {
-      cancelled = true;
-    };
+  const load = useCallback(async () => {
+    const [{ data: latestRow }, { data: statusRow }, { data: locations }, { data: readings }] =
+      await Promise.all([
+        supabase
+          .from("sensor_data")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle<SensorReading>(),
+        supabase.from("robot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
+        supabase
+          .from("plant_locations")
+          .select("*")
+          .eq("robot_id", ROBOT_ID)
+          .order("plant_index", { ascending: true })
+          .returns<PlantLocation[]>(),
+        supabase
+          .from("sensor_data")
+          .select("plant_index, soil_moisture, created_at")
+          .not("plant_index", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(200)
+          .returns<Pick<SensorReading, "plant_index" | "soil_moisture" | "created_at">[]>(),
+      ]);
+
+    if (latestRow) setLatest(latestRow);
+    if (statusRow) setStatus(statusRow);
+
+    const latestByPlant = new Map<number, { soil: number | null; at: string }>();
+    for (const r of readings ?? []) {
+      if (r.plant_index == null) continue;
+      if (!latestByPlant.has(r.plant_index)) {
+        latestByPlant.set(r.plant_index, { soil: r.soil_moisture, at: r.created_at });
+      }
+    }
+    const merged: PlantWithReading[] = (locations ?? []).map((p) => ({
+      ...p,
+      soilMoisture: latestByPlant.get(p.plant_index)?.soil ?? null,
+      readingAt: latestByPlant.get(p.plant_index)?.at ?? null,
+    }));
+    setPlants(merged);
   }, [supabase]);
 
-  const hasGps = latest?.latitude != null && latest?.longitude != null;
+  useEffect(() => {
+    load();
+    const channel = supabase
+      .channel("field_map_live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "plant_locations" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "sensor_data" }, () => load())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${ROBOT_ID}` },
+        (payload) => setStatus(payload.new as RobotStatus)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, load]);
+
+  const waterNow = useCallback(async (plantIndex: number) => {
+    setSending(plantIndex);
+    try {
+      await fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "goto_plant", value: plantIndex }),
+      });
+    } finally {
+      setSending(null);
+    }
+  }, []);
+
+  const robotHasGps = latest?.latitude != null && latest?.longitude != null;
+  const isOnline =
+    !!status?.online &&
+    !!status?.updated_at &&
+    Date.now() - new Date(status.updated_at).getTime() < 30_000;
+
+  const robotMarker = robotHasGps
+    ? { latitude: latest!.latitude!, longitude: latest!.longitude!, online: isOnline }
+    : null;
+
+  const hasAnyMap = plants.length > 0 || robotHasGps;
 
   return (
     <DashboardShell title="Field Map" subtitle="agribot-01">
@@ -55,23 +125,19 @@ export default function FieldPage() {
                 Plant Locations
               </span>
               <span className="block text-xs text-muted dark:text-gray-400">
-                See every saved plant spot and its soil moisture
+                {plants.length > 0
+                  ? `${plants.length} saved spot${plants.length === 1 ? "" : "s"} — shown on the map below`
+                  : "See every saved plant spot and its soil moisture"}
               </span>
             </span>
           </span>
           <ChevronRight className="h-4 w-4 text-muted dark:text-gray-400" />
         </Link>
 
-        {hasGps ? (
-          <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <div className="relative h-52 bg-gradient-to-br from-primary/15 via-primary/5 to-secondary/10">
-              <FieldGrid className="absolute inset-0 h-full w-full opacity-70" />
-              <span className="absolute left-1/2 top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-white shadow-md ring-4 ring-white/60">
-                <MapPin className="h-4 w-4" />
-              </span>
-              <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-sm">
-                {latest!.latitude!.toFixed(4)}, {latest!.longitude!.toFixed(4)}
-              </span>
+        {hasAnyMap ? (
+          <Card className="overflow-hidden p-0">
+            <div className="h-64 w-full">
+              <PlantsMapLoader plants={plants} onWater={waterNow} sendingIndex={sending} robot={robotMarker} />
             </div>
             <div className="grid grid-cols-3 divide-x divide-border p-3 text-center dark:divide-gray-800">
               <TelemetryCell icon={Gauge} label="Speed" value={status ? `${status.speed_value}` : "—"} />
@@ -82,16 +148,18 @@ export default function FieldPage() {
               />
               <TelemetryCell icon={Power} label="Mode" value={status?.mode === "auto" ? "Auto" : "Manual"} />
             </div>
-            <p className="border-t border-border px-3 py-2 text-center text-[11px] text-muted dark:border-gray-800 dark:text-gray-400">
-              As of{" "}
-              {new Date(latest!.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </p>
-          </section>
+            {latest && (
+              <p className="border-t border-border px-3 py-2 text-center text-[11px] text-muted dark:border-gray-800 dark:text-gray-400">
+                Robot position as of{" "}
+                {new Date(latest.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+          </Card>
         ) : (
           <ComingSoon
             icon={Map}
             title="Field map coming soon"
-            description="An interactive zone map with soil-health overlays will appear here once GPS is wired into the robot's firmware."
+            description="Save at least one plant location, or get a GPS fix on the robot, and the map will appear here."
           />
         )}
 
@@ -139,18 +207,5 @@ function Legend({ color, label }: { color: string; label: string }) {
       {label}
     </span>
   );
-}
-
-/** Stylized field-row grid — matches the welcome page's map preview, no map SDK dependency */
-function FieldGrid({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 300 200" preserveAspectRatio="none" className={className} aria-hidden="true">
-      {Array.from({ length: 10 }).map((_, i) => (
-        <line key={`v${i}`} x1={i * 30} y1="0" x2={i * 30} y2="200" stroke="currentColor" strokeOpacity="0.15" className="text-primary" />
-      ))}
-      {Array.from({ length: 7 }).map((_, i) => (
-        <line key={`h${i}`} x1="0" y1={i * 30} x2="300" y2={i * 30} stroke="currentColor" strokeOpacity="0.1" className="text-primary" />
-      ))}
-    </svg>
-  );
           }
+        
