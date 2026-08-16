@@ -11,7 +11,7 @@ export default async function LogsPage() {
     .from("robot_logs")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(100)
+    .limit(200)
     .returns<RobotLog[]>();
 
   return <LogsClient initialLogs={logs ?? []} />;
