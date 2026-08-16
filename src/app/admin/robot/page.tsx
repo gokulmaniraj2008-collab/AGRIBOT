@@ -14,6 +14,7 @@ export default function AdminRobotPage() {
   const [status, setStatus] = useState<RobotStatus | null>(null);
   const [latest, setLatest] = useState<SensorReading | null>(null);
   const [commands, setCommands] = useState<RobotCommandRow[]>([]);
+  const [totalCommandCount, setTotalCommandCount] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -38,11 +39,15 @@ export default function AdminRobotPage() {
         .order("created_at", { ascending: false })
         .limit(10)
         .returns<RobotCommandRow[]>(),
-    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }]) => {
+      supabase
+        .from("robot_commands")
+        .select("id", { count: "exact", head: true }),
+    ]).then(([{ data: statusRow }, { data: sensorRow }, { data: commandRows }, { count }]) => {
       if (cancelled) return;
       if (statusRow) setStatus(statusRow);
       if (sensorRow) setLatest(sensorRow);
       if (commandRows) setCommands(commandRows);
+      if (count != null) setTotalCommandCount(count);
     });
     return () => {
       cancelled = true;
@@ -51,7 +56,7 @@ export default function AdminRobotPage() {
 
   async function refresh() {
     setBusy("refresh");
-    const [{ data }, { data: sensorRow }, { data: commandRows }] = await Promise.all([
+    const [{ data }, { data: sensorRow }, { data: commandRows }, { count }] = await Promise.all([
       supabase
         .from("robot_status")
         .select("*")
@@ -69,10 +74,14 @@ export default function AdminRobotPage() {
         .order("created_at", { ascending: false })
         .limit(10)
         .returns<RobotCommandRow[]>(),
+      supabase
+        .from("robot_commands")
+        .select("id", { count: "exact", head: true }),
     ]);
     if (data) setStatus(data);
     if (sensorRow) setLatest(sensorRow);
     if (commandRows) setCommands(commandRows);
+    if (count != null) setTotalCommandCount(count);
     setBusy(null);
   }
 
@@ -135,6 +144,10 @@ export default function AdminRobotPage() {
         .returns<RobotCommandRow[]>(),
     ]);
     if (commandRows) setCommands(commandRows);
+    const { count } = await supabase
+      .from("robot_commands")
+      .select("id", { count: "exact", head: true });
+    if (count != null) setTotalCommandCount(count);
 
     if (failed.length === 0) {
       setNote("Stop command sent to agribot-01. It will take effect within a few seconds once the robot polls for commands.");
@@ -142,24 +155,25 @@ export default function AdminRobotPage() {
     setBusy(null);
   }
 
-  async function clearPendingCommands() {
-    setBusy("pending");
+  async function clearAllCommands() {
+    setBusy("clear");
     setError(null);
     setNote(null);
     const { data, error: err } = await supabase
       .from("robot_commands")
       .delete()
-      .eq("executed", false)
+      .not("id", "is", null) // delete-all guard: Supabase requires a filter on delete
       .select();
     if (err) {
       setError(err.message);
     } else {
       const deletedCount = data?.length ?? 0;
-      setCommands((prev) => prev.filter((c) => c.executed));
+      setCommands([]);
+      setTotalCommandCount(0);
       if (deletedCount === 0) {
-        setNote("No pending commands to clear — everything already executed.");
+        setNote("No commands to clear — the list is already empty.");
       } else {
-        setNote(`Cleared ${deletedCount} pending command${deletedCount === 1 ? "" : "s"}.`);
+        setNote(`Cleared ${deletedCount} command${deletedCount === 1 ? "" : "s"} (executed + pending).`);
       }
     }
     setBusy(null);
@@ -169,7 +183,6 @@ export default function AdminRobotPage() {
   const isStale =
     status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
   const active = isOnline && !isStale;
-  const pendingCount = commands.filter((c) => !c.executed).length;
 
   return (
     <DashboardShell title="Robot Control" subtitle="Admin" isAdmin>
@@ -242,15 +255,15 @@ export default function AdminRobotPage() {
               {busy === "reset" ? "Resetting…" : "Force stop & reset"}
             </button>
             <button
-              onClick={clearPendingCommands}
-              disabled={busy === "pending" || pendingCount === 0}
+              onClick={clearAllCommands}
+              disabled={busy === "clear" || !totalCommandCount}
               className="rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs font-semibold text-foreground transition hover:bg-background disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
             >
-              {busy === "pending"
+              {busy === "clear"
                 ? "Clearing…"
-                : pendingCount === 0
-                ? "No pending commands"
-                : `Clear ${pendingCount} pending command${pendingCount === 1 ? "" : "s"}`}
+                : !totalCommandCount
+                ? "No commands to clear"
+                : `Clear all commands (${totalCommandCount})`}
             </button>
           </div>
         </Card>
@@ -335,5 +348,5 @@ export default function AdminRobotPage() {
       </>
     </DashboardShell>
   );
-      }
-      
+        }
+
