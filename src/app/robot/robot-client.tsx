@@ -215,6 +215,17 @@ export default function RobotClient({
   return (
     <DashboardShell title="Robot Control" subtitle="AgriBot AI — Unit 01" online={active}>
       <>
+        <Link
+          href="/logs"
+          className="mb-3 flex items-center justify-between rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+        >
+          <span className="flex items-center gap-2">
+            <Radar className="h-4 w-4" style={{ color: SECTION_TINTS.status }} />
+            View Activity Log
+          </span>
+          <span className="text-xs font-medium text-muted">Detect → water → save →</span>
+        </Link>
+
         <section className="rounded-2xl p-4 shadow-sm" style={tint(SECTION_TINTS.status)}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
