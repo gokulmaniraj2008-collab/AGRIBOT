@@ -27,6 +27,8 @@ export type RobotStatus = {
   gps_satellites: number | null;
   last_latitude: number | null;
   last_longitude: number | null;
+  camera_ip?: string | null; // set by agribot-01-cam's heartbeat only — the
+                              // main agribot-01 row won't have this populated
 };
 
 export type RobotCommand =
