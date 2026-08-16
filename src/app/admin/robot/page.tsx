@@ -16,6 +16,7 @@ export default function AdminRobotPage() {
   const [commands, setCommands] = useState<RobotCommandRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +79,38 @@ export default function AdminRobotPage() {
   async function resetRobot() {
     setBusy("reset");
     setError(null);
+    setNote(null);
+
+    // 1. Tell the actual robot to stop — the ESP32 only reacts to rows in
+    //    robot_commands (it never reads robot_status), so without this the
+    //    button just edits a display value and the robot keeps doing whatever
+    //    it was doing.
+    const results = await Promise.all([
+      fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "stop" }),
+      }),
+      fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "pump_off" }),
+      }),
+      fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "set_mode_manual" }),
+      }),
+    ]);
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length > 0) {
+      setError(
+        `Failed to send ${failed.length} of 3 stop command(s) — check that robot_commands insert policy covers this account.`
+      );
+    }
+
+    // 2. Also force the dashboard's own status row, so the UI reflects
+    //    "offline/stopped" immediately even if the robot is unreachable.
     const { data, error: err } = await supabase
       .from("robot_status")
       .update({
@@ -92,20 +125,42 @@ export default function AdminRobotPage() {
       .single<RobotStatus>();
     if (err) setError(err.message);
     else if (data) setStatus(data);
+
+    const [{ data: commandRows }] = await Promise.all([
+      supabase
+        .from("robot_commands")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .returns<RobotCommandRow[]>(),
+    ]);
+    if (commandRows) setCommands(commandRows);
+
+    if (failed.length === 0) {
+      setNote("Stop command sent to agribot-01. It will take effect within a few seconds once the robot polls for commands.");
+    }
     setBusy(null);
   }
 
   async function clearPendingCommands() {
     setBusy("pending");
     setError(null);
-    const { error: err } = await supabase
+    setNote(null);
+    const { data, error: err } = await supabase
       .from("robot_commands")
       .delete()
-      .eq("executed", false);
+      .eq("executed", false)
+      .select();
     if (err) {
       setError(err.message);
     } else {
+      const deletedCount = data?.length ?? 0;
       setCommands((prev) => prev.filter((c) => c.executed));
+      if (deletedCount === 0) {
+        setNote("No pending commands to clear — everything already executed.");
+      } else {
+        setNote(`Cleared ${deletedCount} pending command${deletedCount === 1 ? "" : "s"}.`);
+      }
     }
     setBusy(null);
   }
@@ -114,6 +169,7 @@ export default function AdminRobotPage() {
   const isStale =
     status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
   const active = isOnline && !isStale;
+  const pendingCount = commands.filter((c) => !c.executed).length;
 
   return (
     <DashboardShell title="Robot Control" subtitle="Admin" isAdmin>
@@ -129,6 +185,12 @@ export default function AdminRobotPage() {
         {error && (
           <div className="mb-4 rounded-xl border border-danger/30 bg-danger/5 px-3 py-2.5 text-xs font-medium text-danger">
             {error}
+          </div>
+        )}
+
+        {note && !error && (
+          <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs font-medium text-primary">
+            {note}
           </div>
         )}
 
@@ -181,10 +243,14 @@ export default function AdminRobotPage() {
             </button>
             <button
               onClick={clearPendingCommands}
-              disabled={busy === "pending"}
+              disabled={busy === "pending" || pendingCount === 0}
               className="rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs font-semibold text-foreground transition hover:bg-background disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
             >
-              {busy === "pending" ? "Clearing…" : "Clear pending commands"}
+              {busy === "pending"
+                ? "Clearing…"
+                : pendingCount === 0
+                ? "No pending commands"
+                : `Clear ${pendingCount} pending command${pendingCount === 1 ? "" : "s"}`}
             </button>
           </div>
         </Card>
@@ -269,5 +335,5 @@ export default function AdminRobotPage() {
       </>
     </DashboardShell>
   );
-            }
-                
+      }
+      
