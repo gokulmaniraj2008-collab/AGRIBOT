@@ -27,6 +27,9 @@ import {
   Globe,
   Camera,
   Clock,
+  ArrowUp,
+  ArrowDown,
+  Square,
 } from "lucide-react";
 
 const ROBOT_ID = "agribot-01";
@@ -153,6 +156,28 @@ export default function DevicePage() {
   const [cameraChecked, setCameraChecked] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<RobotStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [moveBusy, setMoveBusy] = useState<"forward" | "backward" | "stop" | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  async function sendMove(direction: "forward" | "backward" | "stop") {
+    setMoveBusy(direction);
+    setMoveError(null);
+    try {
+      const res = await fetch("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: direction, robot_id: ROBOT_ID }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setMoveError(body?.error ?? `Failed to send ${direction} (${res.status})`);
+      }
+    } catch {
+      setMoveError("Network error — could not reach the server.");
+    } finally {
+      setMoveBusy(null);
+    }
+  }
 
   // Initial fetch — everything in parallel
   useEffect(() => {
@@ -370,6 +395,53 @@ export default function DevicePage() {
           </div>
         </Card>
 
+        {/* Manual control — forward / backward / stop */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Manual Control
+          </p>
+          <Card className="p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => sendMove("forward")}
+                disabled={moveBusy !== null}
+                className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-border bg-surface py-5 text-foreground transition active:scale-[0.97] disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <ArrowUp className="h-6 w-6" />
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  {moveBusy === "forward" ? "Sending…" : "Forward"}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sendMove("backward")}
+                disabled={moveBusy !== null}
+                className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-border bg-surface py-5 text-foreground transition active:scale-[0.97] disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <ArrowDown className="h-6 w-6" />
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  {moveBusy === "backward" ? "Sending…" : "Backward"}
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => sendMove("stop")}
+              disabled={moveBusy !== null}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger/5 py-4 text-danger transition active:scale-[0.98] disabled:opacity-50"
+            >
+              <Square className="h-5 w-5" />
+              <span className="text-xs font-semibold uppercase tracking-wide">
+                {moveBusy === "stop" ? "Sending…" : "Stop"}
+              </span>
+            </button>
+            {moveError && (
+              <p className="mt-3 text-xs font-medium text-danger">{moveError}</p>
+            )}
+          </Card>
+        </div>
+
         {/* Link health — per-subsystem online/offline */}
         <div className="mt-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
@@ -453,7 +525,7 @@ export default function DevicePage() {
           </Card>
         </div>
 
-        {/* Robot state */}
+                {/* Robot state */}
         <div className="mt-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
             Robot State
