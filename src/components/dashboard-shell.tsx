@@ -5,14 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme-context";
 import {
-  LayoutDashboard, Map, Bot, Sparkles, Leaf,
+  LayoutDashboard, Map, Sparkles, Leaf,
   Bell, User, Sun, Moon,
 } from "lucide-react";
 
 const BOTTOM_NAV_ITEMS = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/field", label: "Farm", icon: Map },
-  { href: "/robot", label: "Robot", icon: Bot },
   { href: "/assistant", label: "AI", icon: Sparkles },
   { href: "/profile", label: "Profile", icon: User },
 ];
@@ -133,4 +132,4 @@ export function DashboardShell({
 
 
 
-            
+
