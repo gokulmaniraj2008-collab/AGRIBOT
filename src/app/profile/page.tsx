@@ -16,11 +16,9 @@ import {
   ShieldCheck,
   ChevronRight,
   Camera,
-  Cpu,
 } from "lucide-react";
 
 const MORE_LINKS = [
-  { href: "/device", label: "ESP32 Device", desc: "Hardware status & config", icon: Cpu },
   { href: "/camera", label: "Camera Feed", desc: "Live ESP32-CAM view", icon: Camera },
 ];
 
@@ -236,4 +234,5 @@ export default function ProfilePage() {
     </DashboardShell>
   );
         }
-        
+
+          
