@@ -12,6 +12,7 @@ import {
   Database,
   Users,
   MessageSquare,
+  Cpu,
   ChevronRight,
 } from "lucide-react";
 
@@ -21,6 +22,12 @@ const SECTIONS = [
     icon: Power,
     title: "Robot Control",
     desc: "Status, sensor data & recent commands",
+  },
+  {
+    href: "/admin/device",
+    icon: Cpu,
+    title: "ESP32 Device",
+    desc: "Hardware status & config",
   },
   {
     href: "/admin/messages",
@@ -118,4 +125,4 @@ export default function AdminPage() {
   );
      }
 
-    
+
