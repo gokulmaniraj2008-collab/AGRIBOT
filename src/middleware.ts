@@ -32,7 +32,6 @@ export async function middleware(request: NextRequest) {
   const PROTECTED_PREFIXES = [
     "/dashboard",
     "/field",
-    "/robot",
     "/alerts",
     "/profile",
     "/analytics",
@@ -65,7 +64,6 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/field/:path*",
-    "/robot/:path*",
     "/alerts/:path*",
     "/profile/:path*",
     "/analytics/:path*",
