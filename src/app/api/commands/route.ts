@@ -11,6 +11,7 @@ const VALID_COMMANDS: RobotCommand[] = [
   "pump_on",
   "pump_off",
   "set_speed",
+  "set_servo_angle",
   "set_mode_auto",
   "set_mode_manual",
   "set_irrigation_auto_on",
@@ -65,6 +66,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (command === "set_servo_angle" && (value === null || value < 0 || value > 180)) {
+    return NextResponse.json(
+      { error: "set_servo_angle requires a numeric 'value' between 0 and 180." },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("robot_commands")
     .insert({ robot_id, command, value })
@@ -109,6 +117,8 @@ function describeCommand(command: string, value: number | null): string {
       return "Sent command: turn pump OFF";
     case "set_speed":
       return `Sent command: set speed to ${value ?? "?"}`;
+    case "set_servo_angle":
+      return `Sent command: set servo angle to ${value ?? "?"}°`;
     case "set_mode_auto":
       return "Sent command: switch to auto mode";
     case "set_mode_manual":
@@ -140,4 +150,4 @@ function describeCommand(command: string, value: number | null): string {
   }
 }
 
-    
+
