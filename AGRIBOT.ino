@@ -68,8 +68,8 @@ const char* password = "12345678";
 // the firmware per this project's schema/RLS design (see migrations
 // 0001_init.sql and 0008_device_messages.sql). Keep this key device-side
 // only — never commit it to the repo or put it in the web app.
-const char* SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
-const char* SUPABASE_SERVICE_KEY = "YOUR_SERVICE_ROLE_KEY";
+const char* SUPABASE_URL = "https://hvnasippwadzygnaodpp.supabase.co";
+const char* SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTkyODc0MywiZXhwIjoyMDkxNTA0NzQzfQ.iNgdptmdbDdq94f_QNVFIcRD3Ny8eb9tVp2q1nMGbX8";
 const char* ROBOT_ID = "agribot-01";
 
 const unsigned long TELEMETRY_INTERVAL_MS = 5000;   // sensor_data + robot_status
