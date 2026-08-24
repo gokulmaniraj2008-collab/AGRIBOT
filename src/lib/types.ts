@@ -78,6 +78,7 @@ export type RobotCommand =
   | "pump_on"
   | "pump_off"
   | "set_speed"
+  | "set_servo_angle"
   | "set_mode_auto"
   | "set_mode_manual"
   | "set_irrigation_auto_on"
