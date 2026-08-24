@@ -13,10 +13,17 @@ import {
   Users,
   MessageSquare,
   Cpu,
+  Gamepad2,
   ChevronRight,
 } from "lucide-react";
 
 const SECTIONS = [
+  {
+    href: "/admin/control",
+    icon: Gamepad2,
+    title: "Manual Control",
+    desc: "Drive, pump, and speed controls",
+  },
   {
     href: "/admin/robot",
     icon: Power,
