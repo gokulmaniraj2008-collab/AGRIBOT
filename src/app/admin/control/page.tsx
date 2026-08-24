@@ -13,6 +13,7 @@ import {
   Square,
   Droplet,
   Gauge,
+  RotateCw,
   Terminal,
   Wifi,
   WifiOff,
@@ -52,6 +53,8 @@ export default function AdminControlPage() {
   const [pumpBusy, setPumpBusy] = useState<"pump_on" | "pump_off" | null>(null);
   const [speedBusy, setSpeedBusy] = useState(false);
   const [speedValue, setSpeedValue] = useState(130);
+  const [servoBusy, setServoBusy] = useState(false);
+  const [servoAngle, setServoAngle] = useState(90);
   const [error, setError] = useState<string | null>(null);
 
   // Initial fetch
@@ -164,6 +167,13 @@ export default function AdminControlPage() {
     setSpeedBusy(true);
     await sendCommand("set_speed", speedValue);
     setSpeedBusy(false);
+  }
+
+  async function applyServo(angle: number) {
+    setServoAngle(angle);
+    setServoBusy(true);
+    await sendCommand("set_servo_angle", angle);
+    setServoBusy(false);
   }
 
   const driveDisabled = driveBusy !== null;
@@ -344,6 +354,66 @@ export default function AdminControlPage() {
           </Card>
         </div>
 
+        {/* Servo */}
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-400">
+            Servo
+          </p>
+          <Card className="p-4">
+            <div className="mb-3 flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <RotateCw className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground dark:text-gray-100">{servoAngle}°</p>
+                <p className="text-[11px] text-muted dark:text-gray-400">
+                  Sends set_servo_angle — the ESP32 applies it directly with myServo.write().
+                </p>
+              </div>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={180}
+              value={servoAngle}
+              onChange={(e) => setServoAngle(Number(e.target.value))}
+              onMouseUp={(e) => applyServo(Number((e.target as HTMLInputElement).value))}
+              onTouchEnd={(e) => applyServo(Number((e.target as HTMLInputElement).value))}
+              disabled={servoBusy}
+              className="w-full accent-primary disabled:opacity-50"
+            />
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => applyServo(0)}
+                disabled={servoBusy}
+                className="rounded-2xl border border-border bg-surface py-3 text-sm font-semibold text-foreground transition active:scale-[0.97] disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+              >
+                0°
+              </button>
+              <button
+                type="button"
+                onClick={() => applyServo(90)}
+                disabled={servoBusy}
+                className="rounded-2xl border border-border bg-surface py-3 text-sm font-semibold text-foreground transition active:scale-[0.97] disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+              >
+                90°
+              </button>
+              <button
+                type="button"
+                onClick={() => applyServo(180)}
+                disabled={servoBusy}
+                className="rounded-2xl border border-border bg-surface py-3 text-sm font-semibold text-foreground transition active:scale-[0.97] disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+              >
+                180°
+              </button>
+            </div>
+            {servoBusy && (
+              <p className="mt-2 text-center text-[11px] text-muted dark:text-gray-400">Sending…</p>
+            )}
+          </Card>
+        </div>
+
         {error && (
           <p className="mt-4 text-center text-xs font-medium text-danger">{error}</p>
         )}
@@ -384,5 +454,5 @@ export default function AdminControlPage() {
       </>
     </DashboardShell>
   );
-        }
-        
+              }
+              
