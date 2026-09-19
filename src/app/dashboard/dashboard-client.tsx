@@ -56,6 +56,31 @@ export default function DashboardClient({
       .then(({ data }) => {
         if (data) setHomeVideos(data);
       });
+
+    // Realtime is not enabled on agribot_sensor_data, so polling is the
+    // reliable fallback for the ESP32's current readings.
+    const poll = async () => {
+      const sessionStartedAt = liveSessionStartedAt.current;
+      if (!sessionStartedAt) return;
+
+      const { data } = await supabase
+        .from("agribot_sensor_data")
+        .select("*")
+        .gte("created_at", sessionStartedAt)
+        .order("created_at", { ascending: false })
+        .limit(50)
+        .returns<SensorReading[]>();
+
+      if (liveSessionStartedAt.current === sessionStartedAt && data) {
+        setReadings(data);
+      }
+    };
+
+    const interval = window.setInterval(poll, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
   }, [supabase]);
 
   useEffect(() => {
