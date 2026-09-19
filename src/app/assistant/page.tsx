@@ -215,13 +215,13 @@ function AssistantPageInner() {
     let cancelled = false;
     Promise.all([
       supabase
-        .from("sensor_data")
+        .from("agribot_sensor_data")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle<SensorReading>(),
       supabase
-        .from("robot_status")
+        .from("agribot_status")
         .select("*")
         .eq("robot_id", "agribot-01")
         .single<RobotStatus>(),
