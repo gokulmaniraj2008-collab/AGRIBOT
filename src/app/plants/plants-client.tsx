@@ -5,10 +5,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge } from "@/components/ui-kit";
-import ComingSoon from "@/components/coming-soon";
 import { PlantsMapLoader } from "@/components/plants-map-loader";
 import type { PlantLocation, SensorReading } from "@/lib/types";
-import { MapPin, Droplets, Navigation, ExternalLink, History } from "lucide-react";
+import { MapPin, Droplets, Navigation, ExternalLink, History, FlaskConical } from "lucide-react";
 
 const ROBOT_ID = "agribot-01";
 
@@ -16,12 +15,19 @@ type PlantWithReading = PlantLocation & {
   soilMoisture: number | null;
   readingAt: string | null;
 };
+const DEMO_PLANTS: PlantWithReading[] = [
+  { id: -1, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 1, latitude: 11.01695, longitude: 76.95585, soilMoisture: 42, readingAt: null },
+  { id: -2, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 2, latitude: 11.01720, longitude: 76.95615, soilMoisture: 28, readingAt: null },
+  { id: -3, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 3, latitude: 11.01665, longitude: 76.95635, soilMoisture: 61, readingAt: null },
+  { id: -4, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 4, latitude: 11.01645, longitude: 76.95565, soilMoisture: 35, readingAt: null },
+];
 
 export default function PlantsClient() {
   const supabase = createClient();
   const [plants, setPlants] = useState<PlantWithReading[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState<number | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
 
   const load = useCallback(async () => {
     const [{ data: locations }, { data: readings }] = await Promise.all([
@@ -54,7 +60,13 @@ export default function PlantsClient() {
       readingAt: latestByPlant.get(p.plant_index)?.at ?? null,
     }));
 
-    setPlants(merged);
+    if (merged.length === 0) {
+      setPlants(DEMO_PLANTS);
+      setDemoMode(true);
+    } else {
+      setPlants(merged);
+      setDemoMode(false);
+    }
     setLoading(false);
   }, [supabase]);
 
@@ -91,23 +103,22 @@ export default function PlantsClient() {
     }
   }, []);
 
-  if (!loading && plants.length === 0) {
-    return (
-      <DashboardShell title="Plant Locations" subtitle={ROBOT_ID}>
-        <ComingSoon
-          icon={MapPin}
-          title="No saved plant locations yet"
-          description='Send a "save_plant_location" command (or tap Save Location on the Robot page) at each plant to start building this map.'
-        />
-      </DashboardShell>
-    );
-  }
-
   return (
-    <DashboardShell title="Plant Locations" subtitle={`${plants.length} saved · ${ROBOT_ID}`}>
+    <DashboardShell title="Plant Locations" subtitle={demoMode ? `Demo field · ${ROBOT_ID}` : `${plants.length} saved · ${ROBOT_ID}`}>
+      {demoMode && (
+        <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <div className="flex items-start gap-3">
+            <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">DEMO PLANT LOCATIONS</p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sample Coimbatore field coordinates and soil readings are shown until the robot saves real GPS plant locations.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <Card className="overflow-hidden p-0">
         <div className="h-[340px] w-full">
-          <PlantsMapLoader plants={plants} onWater={waterNow} sendingIndex={sending} />
+          <PlantsMapLoader plants={plants} onWater={demoMode ? undefined : waterNow} sendingIndex={demoMode ? null : sending} />
         </div>
         <div className="flex items-center justify-center gap-4 border-t border-border px-3 py-2 text-[11px] text-muted dark:border-gray-800 dark:text-gray-400">
           <Legend color="#16a34a" label="Wet" />
@@ -119,7 +130,7 @@ export default function PlantsClient() {
 
       <div className="mt-4 space-y-2">
         {plants.map((p) => (
-          <PlantRow key={p.id} plant={p} sending={sending === p.plant_index} onWater={waterNow} />
+          <PlantRow key={p.id} plant={p} sending={sending === p.plant_index} onWater={waterNow} demo={demoMode} />
         ))}
       </div>
     </DashboardShell>
@@ -141,6 +152,7 @@ function PlantRow({
   plant: PlantWithReading;
   sending: boolean;
   onWater: (plantIndex: number) => void;
+  demo?: boolean;
 }) {
   const color = moistureColor(plant.soilMoisture);
   const dry = plant.soilMoisture != null && plant.soilMoisture < 30;
@@ -163,16 +175,17 @@ function PlantRow({
         <p className="truncate text-[11px] text-muted dark:text-gray-400">
           {plant.latitude.toFixed(5)}, {plant.longitude.toFixed(5)}
           {plant.readingAt && ` · ${new Date(plant.readingAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`}
+          {!plant.readingAt && " · Sample reading"}
         </p>
       </div>
-      <button
+      {!demo && <button
         onClick={() => onWater(plant.plant_index)}
         disabled={sending}
         className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition active:scale-95 disabled:opacity-50"
       >
         <Navigation className="h-3 w-3" />
         {sending ? "Sending…" : "Go"}
-      </button>
+      </button>}
       <a
         href={`https://www.google.com/maps?q=${plant.latitude},${plant.longitude}`}
         target="_blank"
