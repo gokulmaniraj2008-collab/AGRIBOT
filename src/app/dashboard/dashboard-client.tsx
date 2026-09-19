@@ -7,6 +7,7 @@ import type { HomeVideo, RobotStatus, SensorReading } from "@/lib/types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatCard, AIBanner, SectionHeading, StatusBadge } from "@/components/ui-kit";
 import VideoQuickBox from "@/components/video-quick-box";
+import LiveDatabaseStatus from "@/components/live-database-status";
 import {
   Droplets, Thermometer, Wind, Battery, Map, Bell, Sparkles,
   ChevronRight, LineChart as LineChartIcon, Camera, Wifi,
@@ -143,6 +144,8 @@ export default function DashboardClient({
       <div className="mb-4">
         <AIBanner text={aiTip} cta="Ask AI" />
       </div>
+
+      <LiveDatabaseStatus />
 
       <VideoQuickBox videos={homeVideos} />
 
