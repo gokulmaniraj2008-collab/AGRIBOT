@@ -32,19 +32,18 @@ export default function DashboardClient({
   const [homeVideos, setHomeVideos] = useState<HomeVideo[]>(initialHomeVideos);
 
   useEffect(() => {
-    const startedAt = new Date().toISOString();
-    liveSessionStartedAt.current = startedAt;
-    setReadings([]);
+    // Load the latest database reading immediately when Dashboard opens.
+    // Keep the full history in Supabase; only the UI state is refreshed.
+    liveSessionStartedAt.current = new Date().toISOString();
 
     supabase
       .from("agribot_sensor_data")
       .select("*")
-      .gte("created_at", startedAt)
       .order("created_at", { ascending: false })
       .limit(50)
       .returns<SensorReading[]>()
       .then(({ data }) => {
-        if (data && liveSessionStartedAt.current === startedAt) setReadings(data);
+        if (data) setReadings(data);
       });
 
     supabase
@@ -60,18 +59,14 @@ export default function DashboardClient({
     // Realtime is not enabled on agribot_sensor_data, so polling is the
     // reliable fallback for the ESP32's current readings.
     const poll = async () => {
-      const sessionStartedAt = liveSessionStartedAt.current;
-      if (!sessionStartedAt) return;
-
       const { data } = await supabase
         .from("agribot_sensor_data")
         .select("*")
-        .gte("created_at", sessionStartedAt)
         .order("created_at", { ascending: false })
         .limit(50)
         .returns<SensorReading[]>();
 
-      if (liveSessionStartedAt.current === sessionStartedAt && data) {
+      if (data) {
         setReadings(data);
       }
     };
@@ -91,8 +86,10 @@ export default function DashboardClient({
         { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
         (payload) => {
           const reading = payload.new as SensorReading;
-          if (!liveSessionStartedAt.current || reading.created_at < liveSessionStartedAt.current) return;
-          setReadings((prev) => [reading, ...prev].slice(0, 50));
+          setReadings((prev) => {
+            const next = [reading, ...prev.filter((item) => item.id !== reading.id)];
+            return next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 50);
+          });
         }
       )
       .subscribe();
