@@ -40,7 +40,7 @@ class AgribotApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'AGRIBOT',
-    theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
+    theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF16A34A), scaffoldBackgroundColor: const Color(0xFFF8FAF9), cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))), surfaceTintColor: Colors.white), appBarTheme: const AppBarTheme(elevation: 0, backgroundColor: Colors.white, foregroundColor: Color(0xFF111827))),
     home: const HomePage(),
   );
 }
@@ -118,7 +118,7 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 8),
           const Text('AGRIBOT'),
         ]),
-        actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))],
+        actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh)), const SizedBox(width: 8)],
       ),
       drawer: Drawer(
         child: SafeArea(
@@ -211,7 +211,7 @@ class Dashboard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Row(children: [
-          SvgPicture.asset('assets/agribot_logo.svg', width: 54, height: 54),
+          Image.network('https://raw.githubusercontent.com/gokulmaniraj2008-collab/AGRIBOT/main/src/app/icon.png', width: 54, height: 54, fit: BoxFit.contain),
           const SizedBox(width: 12),
           const Expanded(child: Text('Live Sensor Data', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
         ]),
