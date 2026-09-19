@@ -39,7 +39,7 @@ describe("classifyLogKind", () => {
 });
 
 describe("groupLogsIntoSessions", () => {
-  it("keeps leading logs instead of silently dropping them", () => {
+  it("keeps logs instead of silently dropping them", () => {
     const sessions = groupLogsIntoSessions([
       log(3, "SOIL", "Dry"),
       log(2, "ROBOT", "Moving forward"),
@@ -49,8 +49,9 @@ describe("groupLogsIntoSessions", () => {
     expect(sessions).toHaveLength(2);
     expect(sessions[0].kind).toBe("patrol");
     expect(sessions[1].kind).toBe("self_check");
-    expect(sessions[0].logs).toHaveLength(1);
+    expect(sessions[0].logs).toHaveLength(2);
     expect(sessions[1].logs).toHaveLength(1);
+    expect(sessions[0].logs.map((entry) => entry.id)).toEqual([2, 3]);
   });
 
   it("does not claim a patrol succeeded without its success marker", () => {
