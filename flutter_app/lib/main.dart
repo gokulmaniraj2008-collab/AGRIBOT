@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 const url = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://hvnasippwadzygnaodpp.supabase.co');
 const key = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -25,7 +24,7 @@ class ConfigPage extends StatelessWidget {
     body: Center(child: Padding(
       padding: EdgeInsets.all(24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        SvgPicture.asset('assets/agribot_logo.svg', width: 110, height: 110),
+        Image.network('https://raw.githubusercontent.com/gokulmaniraj2008-collab/AGRIBOT/main/src/app/icon.png', width: 110, height: 110, fit: BoxFit.contain),
         const SizedBox(height: 18),
         const Text('AGRIBOT', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
@@ -115,7 +114,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [
-          SvgPicture.asset('assets/agribot_logo.svg', width: 34, height: 34),
+          Image.network('https://raw.githubusercontent.com/gokulmaniraj2008-collab/AGRIBOT/main/src/app/icon.png', width: 34, height: 34, fit: BoxFit.contain),
           const SizedBox(width: 8),
           const Text('AGRIBOT'),
         ]),
