@@ -137,7 +137,7 @@ function LinkRow({
           </p>
         </div>
       </div>
-      <StatusBadge label={online ? "Online" : "Offline"} tone={online ? "success" : "muted"} />
+      {online && <StatusBadge label="Online" tone="success" />}
     </div>
   );
 }
