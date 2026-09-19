@@ -345,15 +345,6 @@ function AssistantPageInner() {
   }
   const isStale = status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
   const online = (status?.online ?? false) && !isStale;
-  if (dataLoaded) {
-    signals.push({
-      icon: Bot, color: online ? "#16a34a" : "#6b7583", tone: online ? "success" : "muted",
-      title: online ? "Robot is online" : "Robot is offline",
-      detail: online
-        ? `Mode: ${status?.mode === "auto" ? "Auto" : "Manual"} — reporting normally.`
-        : "No recent heartbeat — check power and connectivity.",
-    });
-  }
 
   const insChecks: boolean[] = [];
   if (latest?.soil_moisture != null) insChecks.push(latest.soil_moisture >= 30 && latest.soil_moisture <= 85);
