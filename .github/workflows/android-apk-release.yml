@@ -5,6 +5,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'release/**'
 
 permissions:
   contents: write
@@ -43,5 +45,18 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: true
+
+      - name: Create v1.0.0 release from release branch
+        if: github.ref == 'refs/heads/release/v1.0.0'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          target_commitish: ${{ github.sha }}
+          name: AGRIBOT v1.0.0
+          body: |
+            First Android release of AGRIBOT.
+            Flutter mobile dashboard with Farm/GPS map and live robot location.
           files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
           generate_release_notes: true
