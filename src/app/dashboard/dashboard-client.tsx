@@ -34,7 +34,7 @@ export default function DashboardClient({
 
   useEffect(() => {
     supabase
-      .from("robot_status")
+      .from("agribot_status")
       .select("*")
       .eq("robot_id", "agribot-01")
       .single<RobotStatus>()
@@ -43,7 +43,7 @@ export default function DashboardClient({
       });
 
     supabase
-      .from("sensor_data")
+      .from("agribot_sensor_data")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50)
@@ -65,10 +65,10 @@ export default function DashboardClient({
 
   useEffect(() => {
     const channel = supabase
-      .channel("robot_status_changes_dashboard")
+      .channel("agribot_status_changes_dashboard")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status", filter: "robot_id=eq.agribot-01" },
+        { event: "*", schema: "public", table: "agribot_status", filter: "robot_id=eq.agribot-01" },
         (payload) => setStatus(payload.new as RobotStatus)
       )
       .subscribe();
@@ -79,10 +79,10 @@ export default function DashboardClient({
 
   useEffect(() => {
     const channel = supabase
-      .channel("sensor_data_inserts_dashboard")
+      .channel("agribot_sensor_data_inserts_dashboard")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sensor_data" },
+        { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
         (payload) => setReadings((prev) => [payload.new as SensorReading, ...prev].slice(0, 50))
       )
       .subscribe();
