@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { HomeVideo, RobotStatus, SensorReading } from "@/lib/types";
+import type { HomeVideo, SensorReading } from "@/lib/types";
 import { formatAgriBotTimeOnly } from "@/lib/time";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { Card, StatCard, AIBanner, SectionHeading, StatusBadge } from "@/components/ui-kit";
+import { Card, StatCard, AIBanner, SectionHeading } from "@/components/ui-kit";
 import VideoQuickBox from "@/components/video-quick-box";
-import LiveDatabaseStatus from "@/components/live-database-status";
 import {
   Droplets, Thermometer, Wind, Battery, Map, Bell, Sparkles,
   ChevronRight, LineChart as LineChartIcon, Camera, Wifi,
@@ -30,20 +29,10 @@ export default function DashboardClient({
 }) {
   const supabase = createClient();
 
-  const [status, setStatus] = useState<RobotStatus | null>(initialStatus);
   const [readings, setReadings] = useState<SensorReading[]>(initialReadings);
   const [homeVideos, setHomeVideos] = useState<HomeVideo[]>(initialHomeVideos);
 
   useEffect(() => {
-    supabase
-      .from("agribot_status")
-      .select("*")
-      .eq("robot_id", "agribot-01")
-      .single<RobotStatus>()
-      .then(({ data }) => {
-        if (data) setStatus(data);
-      });
-
     supabase
       .from("agribot_sensor_data")
       .select("*")
@@ -67,20 +56,6 @@ export default function DashboardClient({
 
   useEffect(() => {
     const channel = supabase
-      .channel("agribot_status_changes_dashboard")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "agribot_status", filter: "robot_id=eq.agribot-01" },
-        (payload) => setStatus(payload.new as RobotStatus)
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase]);
-
-  useEffect(() => {
-    const channel = supabase
       .channel("agribot_sensor_data_inserts_dashboard")
       .on(
         "postgres_changes",
@@ -94,11 +69,6 @@ export default function DashboardClient({
   }, [supabase]);
 
   const latest = readings[0];
-  const isOnline = status?.online ?? false;
-  const isStale =
-    status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
-  const active = isOnline && !isStale;
-
   const chronological = [...readings].reverse();
 
   const seriesFor = (key: keyof SensorReading) =>
@@ -128,12 +98,6 @@ export default function DashboardClient({
           <h2 className="text-xl font-extrabold tracking-tight text-foreground dark:text-gray-100">
             {greeting} 👋
           </h2>
-          {active && (
-            <div className="mt-1 flex items-center gap-2 text-xs text-muted dark:text-gray-400">
-              <span>Farm status:</span>
-              <StatusBadge label="Operational" tone="success" />
-            </div>
-          )}
         </div>
         {lastUpdated && (
           <p className="mt-1 shrink-0 text-[11px] text-muted dark:text-gray-400">
@@ -145,8 +109,6 @@ export default function DashboardClient({
       <div className="mb-4">
         <AIBanner text={aiTip} cta="Ask AI" />
       </div>
-
-      <LiveDatabaseStatus />
 
       <VideoQuickBox videos={homeVideos} />
 
