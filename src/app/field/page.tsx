@@ -17,6 +17,19 @@ type PlantWithReading = PlantLocation & {
   readingAt: string | null;
 };
 
+const DEMO_PLANTS: PlantWithReading[] = [
+  { id: -1, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 1, latitude: 11.01695, longitude: 76.95585, soilMoisture: 42, readingAt: null },
+  { id: -2, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 2, latitude: 11.01720, longitude: 76.95615, soilMoisture: 28, readingAt: null },
+  { id: -3, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 3, latitude: 11.01665, longitude: 76.95635, soilMoisture: 61, readingAt: null },
+  { id: -4, created_at: "2026-09-19T15:30:00Z", robot_id: ROBOT_ID, plant_index: 4, latitude: 11.01645, longitude: 76.95565, soilMoisture: 35, readingAt: null },
+];
+
+const DEMO_ROBOT = {
+  latitude: 11.01680,
+  longitude: 76.95600,
+  online: true,
+};
+
 export default function FieldPage() {
   const supabase = createClient();
   const [latest, setLatest] = useState<SensorReading | null>(null);
