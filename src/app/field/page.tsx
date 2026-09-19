@@ -28,12 +28,12 @@ export default function FieldPage() {
     const [{ data: latestRow }, { data: statusRow }, { data: locations }, { data: readings }] =
       await Promise.all([
         supabase
-          .from("sensor_data")
+          .from("agribot_sensor_data")
           .select("*")
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle<SensorReading>(),
-        supabase.from("robot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
+        supabase.from("agribot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
         supabase
           .from("plant_locations")
           .select("*")
@@ -41,7 +41,7 @@ export default function FieldPage() {
           .order("plant_index", { ascending: true })
           .returns<PlantLocation[]>(),
         supabase
-          .from("sensor_data")
+          .from("agribot_sensor_data")
           .select("plant_index, soil_moisture, created_at")
           .not("plant_index", "is", null)
           .order("created_at", { ascending: false })
@@ -72,10 +72,10 @@ export default function FieldPage() {
     const channel = supabase
       .channel("field_map_live")
       .on("postgres_changes", { event: "*", schema: "public", table: "plant_locations" }, () => load())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "sensor_data" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "agribot_sensor_data" }, () => load())
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${ROBOT_ID}` },
+        { event: "*", schema: "public", table: "agribot_status", filter: `robot_id=eq.${ROBOT_ID}` },
         (payload) => setStatus(payload.new as RobotStatus)
       )
       .subscribe();
