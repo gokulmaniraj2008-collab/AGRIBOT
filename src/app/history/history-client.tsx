@@ -77,11 +77,11 @@ export default function HistoryClient({
 
     setDeleting(true);
     setDeleteError(null);
-    // robot_commands has no natural "delete everything" filter, so this
+    // agribot_commands has no natural "delete everything" filter, so this
     // uses the standard Supabase workaround (id >= 0 matches every row)
     // rather than an unfiltered delete. Actual permission is enforced by
     // the table's RLS delete policy, not by this UI check.
-    const { error: err } = await supabase.from("robot_commands").delete().gte("id", 0);
+    const { error: err } = await supabase.from("agribot_commands").delete().gte("id", 0);
     if (err) {
       setDeleteError(err.message);
     } else {
@@ -97,7 +97,7 @@ export default function HistoryClient({
     soil: r.soil_moisture,
   }));
 
-  // Command activity counted from real robot_commands rows — no fabricated
+  // Command activity counted from real agribot_commands rows — no fabricated
   // "distance travelled" or "operating hours" since the schema doesn't
   // track an odometer or uptime clock.
   const counts = commands.reduce<Record<string, number>>((acc, c) => {
