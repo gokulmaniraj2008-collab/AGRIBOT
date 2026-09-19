@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { HomeVideo, SensorReading } from "@/lib/types";
@@ -27,7 +27,7 @@ export default function DashboardClient({
 }) {
   const supabase = createClient();
 
-  const [readings, setReadings] = useState<SensorReading[]>(initialReadings);
+  const [readings, setReadings] = useState<SensorReading[]>([]);\n  const liveSessionStartedAt = useRef<string | null>(null);
   const [homeVideos, setHomeVideos] = useState<HomeVideo[]>(initialHomeVideos);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function DashboardClient({
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
-        (payload) => setReadings((prev) => [payload.new as SensorReading, ...prev].slice(0, 50))
+        (payload) => {\n          const reading = payload.new as SensorReading;\n          if (!liveSessionStartedAt.current || reading.created_at < liveSessionStartedAt.current) return;\n          setReadings((prev) => [reading, ...prev].slice(0, 50));\n        }
       )
       .subscribe();
     return () => {
