@@ -1,286 +1,383 @@
-// AGRIBOT - ESP32 cloud-connected firmware
-// ESP32 -> Next.js device API -> Supabase
-// Hardware: L298N, HC-SR04, servo, soil moisture, DHT22, relay/pump.
+// ============================================================
+// AGRIBOT ESP32 - Supabase + local dashboard
 //
-// SECURITY: do NOT put a Supabase service_role/secret key in this firmware.
-// Set AGRIBOT_API_URL to your deployed Next.js /api/device endpoint and
-// AGRIBOT_DEVICE_TOKEN to the matching Vercel environment variable.
+// POWER ON -> STOP 3 s -> REVERSE -> obstacle < 15 cm -> STOP
+// -> servo 90 -> wait 5 s -> check soil
+// -> DRY: pump ON, wait 5 s, recheck (max 24 cycles)
+// -> soil OK / timeout -> pump OFF -> servo 0
+// -> FORWARD 3 s -> PERMANENT STOP
+//
+// agribot_sensor_data = live readings for the website
+// agribot_log         = event history
+// Data is sent ONLY while the car is stopped.
+// ============================================================
 
+#include <Arduino.h>
 #include <ESP32Servo.h>
 #include <DHT.h>
 #include <WiFi.h>
+#include <WebServer.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
+// ---------------- WiFi (2.4 GHz, needs internet) ----------------
 const char* WIFI_SSID = "AGRIBOT_WIFI";
 const char* WIFI_PASS = "12345678";
-const char* AGRIBOT_API_URL = "https://YOUR-AGRIBOT-DOMAIN.vercel.app/api/device";
-const char* DEVICE_TOKEN = "CHANGE_ME";
-const char* ROBOT_ID = "agribot-01";
+WebServer server(80);
 
+// ---------------- Supabase (anon key only, never service_role) ----------------
+const char* SB_LOG_URL    = "https://hvnasippwadzygnaodpp.supabase.co/rest/v1/agribot_log";
+const char* SB_SENSOR_URL = "https://hvnasippwadzygnaodpp.supabase.co/rest/v1/agribot_sensor_data";
+const char* SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmFzaXBwd2FkenlnbmFvZHBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5Mjg3NDMsImV4cCI6MjA5MTUwNDc0M30.dcS0J77idvjkwNesRaM";
+
+// ---------------- Motors ----------------
 #define IN1 27
 #define IN2 26
 #define ENA 25
 #define IN3 33
 #define IN4 32
 #define ENB 14
-
-#define TRIG_PIN 5
-#define ECHO_PIN 18
-#define SERVO_PIN 13
-#define SOIL_PIN 34
-#define DHT_PIN 15
-#define RELAY_PIN 4
-
-#define DHT_TYPE DHT22
-#define RELAY_ON LOW
-#define RELAY_OFF HIGH
-#define STOP_DISTANCE_CM 15
-#define SOIL_LOW_THRESHOLD 30
-#define MOTOR_SPEED 200
 #define PWM_FREQ 5000
 #define PWM_RES 8
+#define MOTOR_SPEED 200
 
+// ---------------- Timing ----------------
+#define START_DELAY_MS  3000
+#define FORWARD_TIME_MS 3000
+
+// ---------------- Ultrasonic (echo pin needs 5V -> 3.3V divider) ----------------
+#define TRIG_PIN 5
+#define ECHO_PIN 18
+#define STOP_DISTANCE_CM 15
+
+// ---------------- Servo ----------------
+#define SERVO_PIN 13
+#define SERVO_STOP_ANGLE 90
+#define SERVO_NEUTRAL_ANGLE 0
+#define SERVO_SETTLE_DELAY 5000
+#define SOIL_RECHECK_DELAY 5000
+#define MAX_WATER_CYCLES 24
+
+// ---------------- Soil (calibrate these!) ----------------
+#define SOIL_PIN 34
+#define SOIL_DRY_VALUE 4095
+#define SOIL_WET_VALUE 1200
+#define SOIL_LOW_THRESHOLD 30
+
+// ---------------- DHT22 ----------------
+#define DHT_PIN 15
+#define DHT_TYPE DHT22
 DHT dht(DHT_PIN, DHT_TYPE);
-Servo soilServo;
 
-enum RobotMode { MODE_MANUAL, MODE_AUTO };
-enum MotorState { MOTOR_STOPPED, MOTOR_FORWARD, MOTOR_BACKWARD, MOTOR_LEFT, MOTOR_RIGHT };
+// ---------------- Relay ----------------
+#define RELAY_PIN 4
+#define RELAY_ON  LOW
+#define RELAY_OFF HIGH
 
-RobotMode mode = MODE_AUTO;
-MotorState motorState = MOTOR_STOPPED;
+Servo obstacleServo;
 
-bool pumpOn = false;
-bool irrigationAuto = true;
-bool safetyStopped = false;
-int motorSpeed = MOTOR_SPEED;
-int servoAngle = 0;
-int soilMoisture = 0;
-long distanceCm = -1;
-float temperature = 0;
-float humidity = 0;
-String lastFault = "";
-unsigned long lastTelemetry = 0;
-unsigned long lastCommandPoll = 0;
-unsigned long lastSensorRead = 0;
+// ---------------- State ----------------
+bool taskDone = false;
+bool finished = false;
+unsigned long forwardStart = 0;
 
-String motorStateName() {
-  switch (motorState) {
-    case MOTOR_FORWARD: return "forward";
-    case MOTOR_BACKWARD: return "backward";
-    case MOTOR_LEFT: return "left";
-    case MOTOR_RIGHT: return "right";
-    default: return "stopped";
+String statusText = "Starting...";
+String motorMode = "STOPPED";
+float lastTemp = 0, lastHum = 0;
+int lastSoil = 0;
+bool relayState = false;
+long lastDistance = -1;
+
+// ============================================================
+// Helpers
+// ============================================================
+void waitMs(unsigned long ms) {
+  unsigned long start = millis();
+  while (millis() - start < ms) {
+    server.handleClient();
+    delay(10);
   }
 }
 
-void stopMotors() {
-  digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
-  ledcWrite(ENA, 0); ledcWrite(ENB, 0);
-  motorState = MOTOR_STOPPED;
-}
-
-void setMotors(bool a1, bool a2, bool b1, bool b2, MotorState state) {
-  digitalWrite(IN1, a1); digitalWrite(IN2, a2);
-  digitalWrite(IN3, b1); digitalWrite(IN4, b2);
-  ledcWrite(ENA, motorSpeed); ledcWrite(ENB, motorSpeed);
-  motorState = state;
-}
-
-void moveForward() { setMotors(HIGH, LOW, HIGH, LOW, MOTOR_FORWARD); }
-void moveBackward() { setMotors(LOW, HIGH, LOW, HIGH, MOTOR_BACKWARD); }
-void turnLeft() { setMotors(LOW, HIGH, HIGH, LOW, MOTOR_LEFT); }
-void turnRight() { setMotors(HIGH, LOW, LOW, HIGH, MOTOR_RIGHT); }
-
-long readDistance() {
+long getDistanceCM() {
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
   long duration = pulseIn(ECHO_PIN, HIGH, 30000);
-  return duration == 0 ? -1 : (long)(duration * 0.0343f / 2.0f);
+  if (duration == 0) return -1;
+  return (long)(duration * 0.0343 / 2.0);
 }
 
-int readSoil() {
+int getSoilMoisturePercent() {
   int raw = analogRead(SOIL_PIN);
-  int pct = map(raw, 4095, 1200, 0, 100);
-  return constrain(pct, 0, 100);
+  int percent = map(raw, SOIL_DRY_VALUE, SOIL_WET_VALUE, 0, 100);
+  return constrain(percent, 0, 100);
 }
 
 void readSensors() {
-  distanceCm = readDistance();
-  soilMoisture = readSoil();
+  lastSoil = getSoilMoisturePercent();
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  if (!isnan(t)) temperature = t;
-  if (!isnan(h)) humidity = h;
+  if (!isnan(t)) lastTemp = t;
+  if (!isnan(h)) lastHum = h;
 }
 
-void pump(bool on) {
-  pumpOn = on;
-  digitalWrite(RELAY_PIN, on ? RELAY_ON : RELAY_OFF);
+void motorsForward() {
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  ledcWrite(ENA, MOTOR_SPEED);
+  ledcWrite(ENB, MOTOR_SPEED);
+  motorMode = "FORWARD";
 }
 
-void jsonEscapeAppend(String& out, const String& value) {
-  String s = value;
-  s.replace("\\", "\\\\");
-  s.replace(""", "\\"");
-  out += s;
+void motorsReverse() {
+  digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  ledcWrite(ENA, MOTOR_SPEED);
+  ledcWrite(ENB, MOTOR_SPEED);
+  motorMode = "REVERSE";
 }
 
-bool postJson(const String& url, const String& payload) {
-  if (WiFi.status() != WL_CONNECTED) return false;
+void motorsStop() {
+  digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+  ledcWrite(ENA, 0);
+  ledcWrite(ENB, 0);
+  motorMode = "STOPPED";
+}
+
+// ============================================================
+// Supabase (call ONLY while the car is stopped)
+// ============================================================
+void postJson(const char* url, const String& body, const char* tag) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.printf("%s: WiFi disconnected\n", tag);
+    return;
+  }
+  WiFiClientSecure client;
+  client.setInsecure();               // skips certificate check (demo use)
   HTTPClient http;
-  http.begin(url);
+  http.setConnectTimeout(3000);
+  http.setTimeout(3000);
+  if (!http.begin(client, url)) {
+    Serial.printf("%s: begin failed\n", tag);
+    return;
+  }
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("x-agribot-device-token", DEVICE_TOKEN);
-  int code = http.POST(payload);
+  http.addHeader("apikey", SB_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SB_KEY);
+  http.addHeader("Prefer", "return=minimal");
+  int code = http.POST(body);
+  Serial.printf("%s: %d\n", tag, code);   // 201 = success
   http.end();
-  return code >= 200 && code < 300;
 }
 
-bool sendTelemetry() {
-  String payload = "{";
-  payload += "\"robot_id\":\""; payload += ROBOT_ID; payload += "\",";
-  payload += "\"soil_moisture\":"; payload += soilMoisture; payload += ",";
-  payload += "\"temperature\":"; payload += String(temperature, 1); payload += ",";
-  payload += "\"humidity\":"; payload += String(humidity, 1); payload += ",";
-  payload += "\"distance_cm\":"; payload += distanceCm; payload += ",";
-  payload += "\"pump_status\":"; payload += pumpOn ? "true" : "false"; payload += ",";
-  payload += "\"motor_state\":\""; payload += motorStateName(); payload += "\",";
-  payload += "\"mode\":\""; payload += mode == MODE_AUTO ? "auto" : "manual"; payload += "\",";
-  payload += "\"speed_value\":"; payload += motorSpeed; payload += ",";
-  payload += "\"irrigation_auto\":"; payload += irrigationAuto ? "true" : "false"; payload += ",";
-  payload += "\"irrigation_threshold\":"; payload += SOIL_LOW_THRESHOLD; payload += ",";
-  payload += "\"safety_stopped\":"; payload += safetyStopped ? "true" : "false";
-  payload += "}";
-  return postJson(String(AGRIBOT_API_URL) + "/telemetry", payload);
+void logEverything() {
+  String relay = relayState ? "true" : "false";
+
+  String sensorBody = "{";
+  sensorBody += "\"soil_moisture\":" + String(lastSoil) + ",";
+  sensorBody += "\"temperature\":" + String(lastTemp, 1) + ",";
+  sensorBody += "\"humidity\":" + String(lastHum, 1) + ",";
+  sensorBody += "\"distance_cm\":" + String(lastDistance) + ",";
+  sensorBody += "\"relay\":" + relay + ",";
+  sensorBody += "\"motor\":\"" + motorMode + "\",";
+  sensorBody += "\"status\":\"" + statusText + "\"}";
+  postJson(SB_SENSOR_URL, sensorBody, "Sensor");
+
+  String logBody = "{";
+  logBody += "\"status\":\"" + statusText + "\",";
+  logBody += "\"distance_cm\":" + String(lastDistance) + ",";
+  logBody += "\"soil_pct\":" + String(lastSoil) + ",";
+  logBody += "\"temp_c\":" + String(lastTemp, 1) + ",";
+  logBody += "\"hum_pct\":" + String(lastHum, 1) + ",";
+  logBody += "\"relay\":" + relay + ",";
+  logBody += "\"motor\":\"" + motorMode + "\"}";
+  postJson(SB_LOG_URL, logBody, "History");
 }
 
-void executeCommand(int id, const String& command, float value) {
-  if (command == "forward") moveForward();
-  else if (command == "backward") moveBackward();
-  else if (command == "left") turnLeft();
-  else if (command == "right") turnRight();
-  else if (command == "stop") { safetyStopped = true; stopMotors(); pump(false); }
-  else if (command == "pump_on") pump(true);
-  else if (command == "pump_off") pump(false);
-  else if (command == "set_speed") motorSpeed = constrain((int)value, 0, 255);
-  else if (command == "set_servo_angle") { servoAngle = constrain((int)value, 0, 180); soilServo.write(servoAngle); }
-  else if (command == "set_mode_auto") { mode = MODE_AUTO; safetyStopped = false; }
-  else if (command == "set_mode_manual") mode = MODE_MANUAL;
-  else if (command == "set_irrigation_auto_on") irrigationAuto = true;
-  else if (command == "set_irrigation_auto_off") irrigationAuto = false;
-  else if (command == "set_irrigation_threshold") {}
-  else if (command == "safety_reset") { safetyStopped = false; stopMotors(); pump(false); }
-  else if (command == "start_mission") { mode = MODE_AUTO; safetyStopped = false; }
-  else if (command == "cancel_mission") { stopMotors(); pump(false); safetyStopped = true; }
+// ============================================================
+// Local dashboard
+// ============================================================
+void handleRoot() {
+  String html = R"rawliteral(
+<!DOCTYPE html><html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="3">
+<title>AGRIBOT ESP32</title>
+<style>
+body{font-family:Arial;background:#111;color:#fff;padding:20px}
+.card{background:#222;padding:18px;margin:10px 0;border-radius:12px}
+.value{font-size:25px;font-weight:bold}
+</style></head><body>
+<h1>AGRIBOT</h1>
+)rawliteral";
 
-  String ack = "{\"id\":" + String(id) + "}";
-  postJson(String(AGRIBOT_API_URL) + "/commands", ack);
+  html += "<div class='card'>Status:<div class='value'>" + statusText + "</div></div>";
+  html += "<div class='card'>Soil:<div class='value'>" + String(lastSoil) + " %</div></div>";
+  html += "<div class='card'>Temperature:<div class='value'>" + String(lastTemp, 1) + " C</div></div>";
+  html += "<div class='card'>Humidity:<div class='value'>" + String(lastHum, 1) + " %</div></div>";
+  html += "<div class='card'>Distance:<div class='value'>" + String(lastDistance) + " cm</div></div>";
+  html += "<div class='card'>Pump:<div class='value'>" + String(relayState ? "ON" : "OFF") + "</div></div>";
+  html += "<div class='card'>Motor:<div class='value'>" + motorMode + "</div></div>";
+  html += "</body></html>";
+
+  server.send(200, "text/html", html);
 }
 
-void pollCommands() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  HTTPClient http;
-  http.begin(String(AGRIBOT_API_URL) + "/commands");
-  http.addHeader("x-agribot-device-token", DEVICE_TOKEN);
-  int code = http.GET();
-  if (code != 200) { http.end(); return; }
-  String body = http.getString();
-  http.end();
+// ============================================================
+// Setup
+// ============================================================
+void setup() {
+  Serial.begin(115200);
 
-  int idPos = body.indexOf("\"id\":");
-  int cmdPos = body.indexOf("\"command\":\"");
-  if (idPos < 0 || cmdPos < 0 || body.indexOf("null") >= 0) return;
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(SOIL_PIN, INPUT);
 
-  int idStart = idPos + 5;
-  int idEnd = body.indexOf(",", idStart);
-  int id = body.substring(idStart, idEnd).toInt();
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, RELAY_OFF);
+  relayState = false;
 
-  int cmdStart = cmdPos + 11;
-  int cmdEnd = body.indexOf("\"", cmdStart);
-  String command = body.substring(cmdStart, cmdEnd);
+  dht.begin();
 
-  float value = 0;
-  int valuePos = body.indexOf("\"value\":");
-  if (valuePos >= 0) value = body.substring(valuePos + 8).toFloat();
+  // Servo attached FIRST (avoids LEDC timer conflict)
+  obstacleServo.setPeriodHertz(50);
+  obstacleServo.attach(SERVO_PIN, 500, 2400);
+  obstacleServo.write(SERVO_NEUTRAL_ANGLE);
 
-  executeCommand(id, command, value);
+  // Motor PWM AFTER servo
+  ledcAttach(ENA, PWM_FREQ, PWM_RES);
+  ledcAttach(ENB, PWM_FREQ, PWM_RES);
+  motorsStop();
+
+  // WiFi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.print("Connecting WiFi");
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 60) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connected. Dashboard: http://");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi failed - continuing without dashboard/Supabase");
+  }
+
+  server.on("/", handleRoot);
+  server.begin();
+
+  // 3 s startup stop
+  statusText = "Starting - STOP 3 sec";
+  Serial.println(statusText);
+  waitMs(START_DELAY_MS);
+
+  lastDistance = getDistanceCM();
+  readSensors();
+  statusText = "System ready - starting REVERSE";
+  Serial.println(statusText);
+  logEverything();
 }
 
-void automaticControl() {
-  if (mode != MODE_AUTO || safetyStopped) return;
+// ============================================================
+// Loop
+// ============================================================
+void loop() {
+  server.handleClient();
 
-  if (distanceCm != -1 && distanceCm < STOP_DISTANCE_CM) {
-    stopMotors();
-    if (irrigationAuto && soilMoisture < irrigationThreshold) {
-      pump(true);
-      delay(1500);
-      pump(false);
-      readSensors();
+  // ---- Forward 3 s, then permanent stop ----
+  if (taskDone) {
+    if (finished) {
+      motorsStop();
+      relayState = false;
+      digitalWrite(RELAY_PIN, RELAY_OFF);
+      statusText = "Finished - STOPPED";
+      delay(100);
+      return;
     }
+
+    motorsForward();
+    statusText = "Task complete - FORWARD";
+
+    if (millis() - forwardStart >= FORWARD_TIME_MS) {
+      motorsStop();
+      finished = true;
+      statusText = "Finished - STOPPED";
+      Serial.println(statusText);
+      readSensors();
+      logEverything();
+    }
+    delay(100);
     return;
   }
 
-  if (irrigationAuto && soilMoisture < SOIL_LOW_THRESHOLD) {
-    pump(true);
-  } else {
-    pump(false);
-  }
+  // ---- Reverse until obstacle ----
+  lastDistance = getDistanceCM();
 
-  moveForward();
-}
-
-void connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return;
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) delay(250);
-}
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
-  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
-  pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, RELAY_OFF);
-
-  dht.begin();
-  soilServo.setPeriodHertz(50);
-  soilServo.attach(SERVO_PIN, 500, 2400);
-  soilServo.write(0);
-
-  ledcAttach(ENA, PWM_FREQ, PWM_RES);
-  ledcAttach(ENB, PWM_FREQ, PWM_RES);
-  stopMotors();
-
-  connectWiFi();
-  readSensors();
-}
-
-void loop() {
-  connectWiFi();
-
-  if (millis() - lastSensorRead >= 1000) {
-    lastSensorRead = millis();
+  if (lastDistance != -1 && lastDistance < STOP_DISTANCE_CM) {
+    motorsStop();
+    statusText = "Obstacle detected - STOPPED";
+    Serial.println(statusText);
     readSensors();
+    logEverything();
+
+    obstacleServo.write(SERVO_STOP_ANGLE);
+    statusText = "Servo 90 deg - settling";
+    Serial.println(statusText);
+    waitMs(SERVO_SETTLE_DELAY);
+
+    bool soilOK = false;
+    int cycles = 0;
+
+    while (!soilOK) {
+      readSensors();
+      Serial.printf("Soil: %d%%\n", lastSoil);
+
+      if (lastSoil < SOIL_LOW_THRESHOLD) {
+        if (cycles >= MAX_WATER_CYCLES) {
+          statusText = "Watering timeout - check tank/probe";
+          Serial.println(statusText);
+          break;
+        }
+        digitalWrite(RELAY_PIN, RELAY_ON);
+        relayState = true;
+        cycles++;
+        statusText = "Soil DRY - WATERING " + String(cycles) + "/" + String(MAX_WATER_CYCLES);
+        Serial.println(statusText);
+        logEverything();
+        waitMs(SOIL_RECHECK_DELAY);
+      } else {
+        soilOK = true;
+      }
+    }
+
+    digitalWrite(RELAY_PIN, RELAY_OFF);
+    relayState = false;
+    if (soilOK) statusText = "Soil OK - PUMP OFF";
+    Serial.println(statusText);
+    logEverything();
+
+    obstacleServo.write(SERVO_NEUTRAL_ANGLE);
+    waitMs(500);
+
+    taskDone = true;
+    forwardStart = millis();
+    Serial.println("Starting FORWARD 3 sec");
+
+  } else {
+    motorsReverse();
+    statusText = "Reversing - no obstacle";
   }
 
-  if (millis() - lastCommandPoll >= 1500) {
-    lastCommandPoll = millis();
-    pollCommands();
-  }
-
-  automaticControl();
-
-  if (millis() - lastTelemetry >= 3000) {
-    lastTelemetry = millis();
-    sendTelemetry();
-  }
-
-  delay(20);
+  delay(100);
 }
