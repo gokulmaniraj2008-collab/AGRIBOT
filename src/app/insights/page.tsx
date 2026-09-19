@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { SectionHeading, ProgressRing, StatusBadge, IconTile } from "@/components/ui-kit";
 import type { SensorReading } from "@/lib/types";
 import {
-  Droplets, Thermometer, Battery, Bug, Sparkles, Bot,
+  Droplets, Thermometer, Battery, Sparkles, Bot,
 } from "lucide-react";
 
 type Signal = {
@@ -106,8 +106,12 @@ export default function InsightsPage() {
     { icon: Sparkles, color: "#16a34a", tone: "success", title: "Irrigation window detected", detail: "Plant 2 is at 28% soil moisture in the demo field and would be considered for watering." },
   ];
   const displayedSignals = demo ? demoSignals : signals;
-  const score = demo ? 84 : null;
-  const scoreLabel = demo ? "Demo — Good" : "No data yet";
+  const checks: boolean[] = [];
+  if (latest?.soil_moisture != null) checks.push(latest.soil_moisture >= 30 && latest.soil_moisture <= 85);
+  if (latest?.temperature != null) checks.push(latest.temperature <= 32);
+  if (latest?.battery_percent != null) checks.push(latest.battery_percent >= 25);
+  const score = demo ? 84 : checks.length ? Math.round((checks.filter(Boolean).length / checks.length) * 100) : null;
+  const scoreLabel = demo ? "Demo — Good" : score == null ? "No data yet" : score >= 80 ? "Good" : score >= 50 ? "Needs attention" : "At risk";
 
   return (
     <DashboardShell title="AI Insights" subtitle="Farm-wide summary, generated from live sensor data">
@@ -125,7 +129,7 @@ export default function InsightsPage() {
             </p>
             <p className="mt-1 text-base font-semibold">{scoreLabel}</p>
             <p className="mt-0.5 text-xs text-white/80">
-              {demo ? "Sample AI analysis for demonstration — not live robot data." : "Waiting on sensor readings to calculate a score."}
+              {demo ? "Sample AI analysis for demonstration — not live robot data." : `Based on ${checks.length} live sensor metric${checks.length === 1 ? "" : "s"}.`}
             </p>
           </div>
         </section>
