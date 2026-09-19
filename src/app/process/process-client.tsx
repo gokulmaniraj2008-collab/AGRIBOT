@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, Droplets, Gauge, Radio, RotateCw, Sprout, Timer, 
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import type { AgriBotLogRow, SensorReading } from "@/lib/types";
+import { formatAgriBotTimeOnly } from "@/lib/time";
 
 type ProcessStep = { id: string; title: string; detail?: string };
 const STEPS: ProcessStep[] = [
@@ -154,9 +155,9 @@ export default function ProcessClient() {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <InfoCard title="Latest sensor reading" time={timeOf(reading?.created_at)}
+        <InfoCard title="Latest sensor reading" time={formatAgriBotTimeOnly(reading?.created_at)}
           body={"Soil " + (soil == null ? "—" : soil.toFixed(0) + "%") + " · Distance " + (distance == null ? "—" : distance.toFixed(0) + " cm") + " · Pump " + (relay ? "ON" : "OFF")} />
-        <InfoCard title="Latest process log" time={timeOf(log?.created_at)} body={log?.status || "No process log yet"} />
+        <InfoCard title="Latest process log" time={formatAgriBotTimeOnly(log?.created_at)} body={log?.status || "No process log yet"} />
       </div>
       {loading && <p className="mt-4 text-center text-xs text-muted dark:text-gray-400">Loading live process data…</p>}
     </DashboardShell>
