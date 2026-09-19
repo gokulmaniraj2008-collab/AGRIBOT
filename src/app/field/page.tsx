@@ -36,7 +36,7 @@ export default function FieldPage() {
   const [plants, setPlants] = useState<PlantWithReading[]>([]);
 
   const load = useCallback(async () => {
-    const [{ data: latestRow }, { data: locations }, { data: readings }] = await Promise.all([
+    const sessionStartedAt = new Date().toISOString();\n    setLatest(null);\n\n    const [{ data: latestRow }, { data: locations }, { data: readings }] = await Promise.all([
       supabase
         .from("agribot_sensor_data")
         .select("*")
@@ -120,7 +120,7 @@ export default function FieldPage() {
   const hasAnyMap = displayPlants.length > 0 || !!displayRobot;
   const soil = latest?.soil_moisture;
   const isWatering = latest?.relay === true;
-  const statusText = latest?.status ?? "Waiting for sensor data";
+  const statusText = latest?.status ?? "Waiting for a new robot reading";
 
   return (
     <DashboardShell title="Farm" subtitle="agribot-01">
