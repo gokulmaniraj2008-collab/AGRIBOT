@@ -8,7 +8,7 @@ export default async function LogsPage() {
   const supabase = await createClient();
 
   const { data: logs } = await supabase
-    .from("robot_logs")
+    .from("agribot_logs")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(200)
