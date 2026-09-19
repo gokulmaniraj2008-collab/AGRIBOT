@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = adminClient();
   const { data, error } = await supabase
-    .from("robot_commands")
+    .from("agribot_commands")
     .select("*")
     .eq("robot_id", DEVICE_ID)
     .eq("executed", false)
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = adminClient();
   const { error } = await supabase
-    .from("robot_commands")
+    .from("agribot_commands")
     .update({ executed: true, executed_at: new Date().toISOString() })
     .eq("id", body.id)
     .eq("robot_id", DEVICE_ID)
