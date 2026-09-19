@@ -78,6 +78,8 @@ class _LoginState extends State<Login>{
          TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'Password',border:OutlineInputBorder())),
          const SizedBox(height:16),
          SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:go,child:Text(busy?'Please wait':signup?'Create account':'Sign in'))),
+         const SizedBox(height:4),
+         SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:busy?null:()=>Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const Shell(demo:true))),icon:const Icon(Icons.play_arrow),label:const Text('Continue with demo'))),
          TextButton(onPressed:()=>setState(()=>signup=!signup),child:Text(signup?'Sign in':'Create account')),
         ]),
        ),
@@ -88,14 +90,50 @@ class _LoginState extends State<Login>{
   );
  }
 }
-class Shell extends StatefulWidget{const Shell({super.key});@override State<Shell> createState()=>_ShellState();}
+List<Map<String,dynamic>> demoRows(){
+  final now=DateTime.now();
+  return List.generate(12,(i){
+    final soil=58.0+i*0.7;
+    return {
+      'id':1000+i,
+      'created_at':now.subtract(Duration(minutes:i*5)).toIso8601String(),
+      'soil_moisture':soil,
+      'temperature':31.5+i*0.1,
+      'humidity':72.0-i*0.4,
+      'distance_cm':54.0+i,
+      'battery_percent':86.0-i*0.8,
+      'latitude':11.01695,
+      'longitude':76.95585,
+      'relay':false,
+      'motor':'STOPPED',
+      'status':i==0?'Demo mode - robot ready':'Demo sensor reading'
+    };
+  });
+}
+
+class Shell extends StatefulWidget{
+  final bool demo;
+  const Shell({super.key,this.demo=false});
+  @override State<Shell> createState()=>_ShellState();
+}
 class _ShellState extends State<Shell> {
   String page='Dashboard'; List<Map<String,dynamic>> rows=[]; Timer? t;
   final db=Supabase.instance.client;
   final pages=const['Dashboard','History','Profile','Logs','Device','Field','Alerts','Analytics','Insights','AI Assistant','Recommendations','Plants','Camera','Devices','Welcome','Process'];
-  @override void initState(){super.initState();load();t=Timer.periodic(const Duration(seconds:5),(_)=>load());}
+  @override void initState(){
+    super.initState();
+    if(widget.demo){
+      rows=demoRows();
+    } else {
+      load();
+      t=Timer.periodic(const Duration(seconds:5),(_)=>load());
+    }
+  }
   @override void dispose(){t?.cancel();super.dispose();}
-  Future<void> load()async{try{final x=await db.from('agribot_sensor_data').select().order('created_at',ascending:false).limit(100);if(mounted)setState(()=>rows=List<Map<String,dynamic>>.from(x));}catch(_){}} 
+  Future<void> load()async{
+    if(widget.demo)return;
+    try{final x=await db.from('agribot_sensor_data').select().order('created_at',ascending:false).limit(100);if(mounted)setState(()=>rows=List<Map<String,dynamic>>.from(x));}catch(_){}
+  }
   Map<String,dynamic>? get r=>rows.isEmpty?null:rows.first;
   Widget view(){switch(page){
     case'Dashboard':return Dashboard(rows);case'History':return History(rows);case'Profile':return const Profile();
@@ -111,9 +149,9 @@ class _ShellState extends State<Shell> {
         const Padding(padding:EdgeInsets.all(20),child:Row(children:[Icon(Icons.agriculture,color:Color(0xFF16A34A),size:34),SizedBox(width:10),Text('AGRIBOT',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold))])),
         for(final x in pages) ListTile(selected:page==x,selectedColor:const Color(0xFF16A34A),leading:Icon(iconFor(x)),title:Text(x),onTap:()=>pick(x)),
         const Divider(),
-        ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()async{await db.auth.signOut();if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const Login()),(_)=>false);}),
+        ListTile(leading:const Icon(Icons.logout),title:Text(widget.demo?'Exit demo':'Sign out'),onTap:()async{if(widget.demo){if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const Login()),(_)=>false);}else{await db.auth.signOut();if(mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const Login()),(_)=>false);}}),
       ]))),
-      appBar:AppBar(title:Text(page),actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh)),IconButton(onPressed:()=>pick('Alerts'),icon:const Icon(Icons.notifications_none))]),
+      appBar:AppBar(title:Text(page),actions:[if(widget.demo)const Padding(padding:EdgeInsets.symmetric(horizontal:8),child:Center(child:Text('DEMO',style:TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF16A34A))))),IconButton(onPressed:widget.demo?null:load,icon:const Icon(Icons.refresh)),IconButton(onPressed:()=>pick('Alerts'),icon:const Icon(Icons.notifications_none))]),
       body:view(),
       bottomNavigationBar:NavigationBar(selectedIndex:si<0?0:si,onDestinationSelected:(i)=>setState(()=>page=bp[i]),destinations:const[
         NavigationDestination(icon:Icon(Icons.dashboard_outlined),label:'Home'),NavigationDestination(icon:Icon(Icons.map_outlined),label:'Farm'),
