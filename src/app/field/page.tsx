@@ -33,10 +33,15 @@ const DEMO_ROBOT = {
 export default function FieldPage() {
   const supabase = createClient();
   const [latest, setLatest] = useState<SensorReading | null>(null);
-  const [plants, setPlants] = useState<PlantWithReading[]>([]);\n  const liveSessionStartedAt = useRef<string | null>(null);
+  const [plants, setPlants] = useState<PlantWithReading[]>([]);
+  const liveSessionStartedAt = useRef<string | null>(null);
 
   const load = useCallback(async () => {
-    const sessionStartedAt = liveSessionStartedAt.current ?? new Date().toISOString();\n    liveSessionStartedAt.current = sessionStartedAt;\n    setLatest(null);\n\n    const [{ data: latestRow }, { data: locations }, { data: readings }] = await Promise.all([
+    const sessionStartedAt = liveSessionStartedAt.current ?? new Date().toISOString();
+    liveSessionStartedAt.current = sessionStartedAt;
+    setLatest(null);
+
+    const [{ data: latestRow }, { data: locations }, { data: readings }] = await Promise.all([
       supabase
         .from("agribot_sensor_data")
         .select("*")
