@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SectionHeading, StatusBadge } from "@/components/ui-kit";
 import type { SensorReading, RobotCommandRow } from "@/lib/types";
+import { formatAgriBotTimeOnly } from "@/lib/time";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
@@ -92,7 +93,7 @@ export default function HistoryClient({
 
   const chronological = [...readings].reverse();
   const chartData = chronological.map((r) => ({
-    time: new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    time: formatAgriBotTimeOnly(r.created_at).slice(0, 5),
     battery: r.battery_percent,
     soil: r.soil_moisture,
   }));
