@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { data, error } = await supabase
-    .from("robot_commands")
+    .from("agribot_commands")
     .insert({ robot_id, command, value })
     .select()
     .single();
@@ -86,16 +86,6 @@ export async function POST(request: NextRequest) {
   // Mirror the command into the message log so "Recent Commands" and
   // "Message Log" stay in sync. Best-effort: a failure here shouldn't
   // fail the command itself.
-  const { error: msgError } = await supabase.from("device_messages").insert({
-    robot_id,
-    origin: "website",
-    level: "info",
-    message: describeCommand(command, value),
-  });
-  if (msgError) {
-    console.error("Failed to log device message for command:", msgError.message);
-  }
-
   return NextResponse.json({ success: true, command: data });
 }
 
