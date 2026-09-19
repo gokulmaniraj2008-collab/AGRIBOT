@@ -32,7 +32,7 @@ export default function PlantsClient() {
         .order("plant_index", { ascending: true })
         .returns<PlantLocation[]>(),
       supabase
-        .from("sensor_data")
+        .from("agribot_sensor_data")
         .select("plant_index, soil_moisture, created_at")
         .not("plant_index", "is", null)
         .order("created_at", { ascending: false })
@@ -69,7 +69,7 @@ export default function PlantsClient() {
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sensor_data" },
+        { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
         () => load()
       )
       .subscribe();
