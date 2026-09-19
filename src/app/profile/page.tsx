@@ -16,9 +16,13 @@ import {
   ShieldCheck,
   ChevronRight,
   Camera,
+  History,
+  Activity,
 } from "lucide-react";
 
 const MORE_LINKS = [
+  { href: "/dashboard", label: "Live Sensor Data", desc: "View real-time robot sensor readings", icon: Activity },
+  { href: "/history", label: "Sensor History", desc: "View recorded sensor readings and events", icon: History },
   { href: "/camera", label: "Camera Feed", desc: "Live ESP32-CAM view", icon: Camera },
 ];
 
