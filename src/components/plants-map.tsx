@@ -80,7 +80,7 @@ export function PlantsMap({
   robot,
 }: {
   plants: PlantWithReading[];
-  onWater: (plantIndex: number) => void;
+  onWater?: (plantIndex: number) => void;
   sendingIndex: number | null;
   robot?: { latitude: number; longitude: number; online: boolean } | null;
 }) {
@@ -135,13 +135,13 @@ export function PlantsMap({
                 {p.soilMoisture != null ? `Soil: ${p.soilMoisture.toFixed(0)}%` : "No soil reading yet"}
               </p>
               <div className="mt-2 flex gap-2">
-                <button
+                {onWater && <button
                   onClick={() => onWater(p.plant_index)}
                   disabled={sendingIndex === p.plant_index}
                   className="text-xs font-medium text-primary underline disabled:opacity-50"
                 >
                   {sendingIndex === p.plant_index ? "Sending…" : "Send robot here"}
-                </button>
+                </button>}
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}`}
                   target="_blank"
