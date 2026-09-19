@@ -62,6 +62,7 @@ export default function ProcessClient() {
   const [logCount, setLogCount] = useState(0);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
 
   const refresh = useCallback(async () => {
     const [sr, lr, sc, lc] = await Promise.all([
@@ -76,6 +77,7 @@ export default function ProcessClient() {
     setLogCount(lc.count || 0);
     const newest = [sr.data?.created_at, lr.data?.created_at].filter(Boolean).sort().at(-1) || null;
     setLastSeen(newest);
+    setDemoMode(!sr.data && !lr.data);
     setLoading(false);
   }, [supabase]);
 
@@ -94,24 +96,33 @@ export default function ProcessClient() {
     return () => { window.clearInterval(timer); supabase.removeChannel(channel); };
   }, [refresh, supabase]);
 
-  const soil = reading?.soil_moisture ?? log?.soil_pct ?? null;
-  const distance = reading?.distance_cm ?? log?.distance_cm ?? null;
-  const temperature = reading?.temperature ?? log?.temp_c ?? null;
-  const humidity = reading?.humidity ?? log?.hum_pct ?? null;
-  const relay = reading?.relay ?? log?.relay ?? false;
-  const motor = reading?.motor ?? log?.motor ?? "—";
-  const status = reading?.status ?? log?.status ?? "WAITING FOR ESP32";
+  const demoSoil = 28;
+  const demoDistance = 5;
+  const demoTemperature = 32.5;
+  const demoHumidity = 71.5;
+  const demoRelay = true;
+  const demoMotor = "STOPPED";
+  const demoStatus = "Soil DRY - WATERING 6/24";
+  const soil = reading?.soil_moisture ?? log?.soil_pct ?? (demoMode ? demoSoil : null);
+  const distance = reading?.distance_cm ?? log?.distance_cm ?? (demoMode ? demoDistance : null);
+  const temperature = reading?.temperature ?? log?.temp_c ?? (demoMode ? demoTemperature : null);
+  const humidity = reading?.humidity ?? log?.hum_pct ?? (demoMode ? demoHumidity : null);
+  const relay = reading?.relay ?? log?.relay ?? (demoMode ? demoRelay : false);
+  const motor = reading?.motor ?? log?.motor ?? (demoMode ? demoMotor : "—");
+  const status = reading?.status ?? log?.status ?? (demoMode ? demoStatus : "WAITING FOR ESP32");
   const cycle = status.match(/WATERING\s+(\d+)\s*\/\s*(\d+)/i);
-  const live = !!lastSeen && Date.now() - new Date(lastSeen).getTime() < 30000;
+  const live = !demoMode && !!lastSeen && Date.now() - new Date(lastSeen).getTime() < 30000;
   const current = activeStep(reading, log);
 
   return (
     <DashboardShell title="AgriBot Process" subtitle="Live autonomous watering sequence">
+      {demoMode && <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20"><p className="text-sm font-bold text-amber-800 dark:text-amber-300">DEMO PROCESS</p><p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Sample autonomous watering data for presentation. Live ESP32 readings will replace these values automatically.</p></div>}
+
       <div className="mb-4 flex items-start justify-between gap-3">
         <div><h2 className="text-xl font-extrabold tracking-tight text-foreground dark:text-gray-100">Autonomous Process</h2>
-          <p className="mt-1 text-xs text-muted dark:text-gray-400">Live flow from the ESP32 data in Supabase.</p></div>
+          <p className="mt-1 text-xs text-muted dark:text-gray-400">{demoMode ? "Demo process sequence — sample values are shown until the ESP32 sends live data." : "Live flow from the ESP32 data in Supabase."}</p></div>
         <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold dark:border-gray-800 dark:bg-gray-900">
-          <span className={"h-2 w-2 rounded-full " + (live ? "bg-green-500" : "bg-gray-400")} />{live ? "LIVE" : "WAITING"}
+          <span className={"h-2 w-2 rounded-full " + (live ? "bg-green-500" : "bg-gray-400")} />{demoMode ? "DEMO" : live ? "LIVE" : "WAITING"}
         </div>
       </div>
 
@@ -131,7 +142,7 @@ export default function ProcessClient() {
         <div className="mb-4 flex items-center justify-between">
           <div><h3 className="font-bold text-foreground dark:text-gray-100">Process Flow</h3>
             <p className="text-xs text-muted dark:text-gray-400">Current state: {status}</p></div>
-          <div className="text-right text-[11px] text-muted dark:text-gray-400"><div>Sensor rows: {sensorCount}</div><div>Log rows: {logCount}</div></div>
+          {!demoMode && <div className="text-right text-[11px] text-muted dark:text-gray-400"><div>Sensor rows: {sensorCount}</div><div>Log rows: {logCount}</div></div>}
         </div>
         <div className="space-y-2">
           {STEPS.map((step, index) => {
