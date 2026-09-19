@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { Card } from "@/components/ui-kit";
 import { PlantsMapLoader } from "@/components/plants-map-loader";
 import type { SensorReading, PlantLocation } from "@/lib/types";
+import { formatAgriBotTime } from "@/lib/time";
 import { Map as MapIcon, MapPin, Gauge, Battery, Power, Droplets, Thermometer, Wind, Ruler } from "lucide-react";
 import Link from "next/link";
 
@@ -129,7 +130,7 @@ export default function FieldPage() {
           </div>
           {latest && (
             <p className="mt-3 text-[11px] text-muted dark:text-gray-400">
-              Latest reading: {new Date(latest.created_at).toLocaleString()}
+              Latest reading: {formatAgriBotTime(latest.created_at)}
             </p>
           )}
         </Card>
