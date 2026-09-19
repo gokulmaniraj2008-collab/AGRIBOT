@@ -9,7 +9,7 @@ import type { RobotStatus } from "@/lib/types";
 
 // Same camera identity + staleness convention as /device — see the
 // IDENTITY NOTE in esp32cam_supabase_upload.ino. CAM_ROBOT_ID is a
-// separate robot_status row from the main "agribot-01" row.
+// separate agribot_status row from the main "agribot-01" row.
 const CAM_ROBOT_ID = "agribot-01-cam";
 // Matches HEARTBEAT_INTERVAL_MS (5s) in the firmware with margin for
 // ordinary network jitter, same value /device uses for its own
@@ -26,7 +26,7 @@ export default function CameraPage() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from("robot_status")
+        .from("agribot_status")
         .select("*")
         .eq("robot_id", CAM_ROBOT_ID)
         .maybeSingle<RobotStatus>();
@@ -44,7 +44,7 @@ export default function CameraPage() {
       .channel("camera_page_status")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${CAM_ROBOT_ID}` },
+        { event: "*", schema: "public", table: "agribot_status", filter: `robot_id=eq.${CAM_ROBOT_ID}` },
         (payload) => setCameraStatus(payload.new as RobotStatus)
       )
       .subscribe();
