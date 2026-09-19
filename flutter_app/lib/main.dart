@@ -87,10 +87,30 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final pages = [
       Dashboard(row: latest),
-      Devices(row: latest),
-      Process(row: latest),
-      Farm(row: latest),
       History(rows: rows),
+      WebsitePage(page: 'profile', row: latest, rows: rows),
+      WebsitePage(page: 'logs', row: latest, rows: rows),
+      WebsitePage(page: 'device', row: latest, rows: rows),
+      Farm(row: latest),
+      WebsitePage(page: 'alerts', row: latest, rows: rows),
+      WebsitePage(page: 'analytics', row: latest, rows: rows),
+      WebsitePage(page: 'insights', row: latest, rows: rows),
+      WebsitePage(page: 'assistant', row: latest, rows: rows),
+      WebsitePage(page: 'recommendations', row: latest, rows: rows),
+      WebsitePage(page: 'plants', row: latest, rows: rows),
+      WebsitePage(page: 'camera', row: latest, rows: rows),
+      Devices(row: latest),
+      WebsitePage(page: 'welcome', row: latest, rows: rows),
+      Process(row: latest),
+    ];
+    const names = [
+      'Dashboard','History','Profile','Logs','Device','Field','Alerts','Analytics',
+      'Insights','AI Assistant','Recommendations','Plants','Camera','Devices','Welcome','Process'
+    ];
+    const icons = [
+      Icons.dashboard,Icons.history,Icons.person,Icons.article,Icons.smart_toy,Icons.map,
+      Icons.notifications,Icons.analytics,Icons.lightbulb,Icons.auto_awesome,Icons.recommend,
+      Icons.grass,Icons.camera_alt,Icons.memory,Icons.waving_hand,Icons.alt_route
     ];
     return Scaffold(
       appBar: AppBar(
@@ -101,15 +121,40 @@ class _HomePageState extends State<HomePage> {
         ]),
         actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))],
       ),
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            children: [
+              const DrawerHeader(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('🌱 AGRIBOT', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('All website pages in the mobile app'),
+                ]),
+              ),
+              for (var i = 0; i < names.length; i++)
+                ListTile(
+                  leading: Icon(icons[i]),
+                  title: Text(names[i]),
+                  selected: tab == i,
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => tab = i);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
       body: pages[tab],
       bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (v) => setState(() => tab = v),
+        selectedIndex: tab < 5 ? tab : 0,
+        onDestinationSelected: (v) => setState(() => tab = [0, 13, 15, 5, 1][v]),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard), label: 'Dashboard'),
           NavigationDestination(icon: Icon(Icons.memory), label: 'Devices'),
           NavigationDestination(icon: Icon(Icons.alt_route), label: 'Process'),
-          NavigationDestination(icon: Icon(Icons.map), label: 'Farm'),
+          NavigationDestination(icon: Icon(Icons.map), label: 'Field'),
           NavigationDestination(icon: Icon(Icons.history), label: 'History'),
         ],
       ),
