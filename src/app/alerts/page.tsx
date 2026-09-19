@@ -77,16 +77,6 @@ export default function AlertsPage() {
   // Same threshold logic as before — only the presentation below changed.
   const alerts: Alert[] = [];
 
-  if (status && !status.online) {
-    alerts.push({
-      icon: WifiOff,
-      title: "Robot Offline",
-      detail: "No connection from agribot-01 — check power and WiFi.",
-      time,
-      category: "info",
-    });
-  }
-
   if (latest?.soil_moisture != null && latest.soil_moisture < 30) {
     alerts.push({
       icon: Droplets,
