@@ -57,18 +57,6 @@ export function DashboardShell({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {online !== undefined && (
-                <span
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                    online
-                      ? "bg-primary/10 text-primary"
-                      : "bg-gray-100 text-muted dark:bg-gray-800 dark:text-gray-400"
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-primary" : "bg-gray-400"}`} />
-                  {online ? "Online" : "Offline"}
-                </span>
-              )}
               <Link
                 href="/alerts"
                 className={`rounded-lg p-2 transition ${
