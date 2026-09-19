@@ -101,7 +101,7 @@ export default function FieldPage() {
       }
     : null;
 
-  const hasAnyMap = plants.length > 0 || robotHasGps;
+  const demoMode = plants.length === 0 && !robotHasGps;\n  const displayPlants = plants.length > 0 ? plants : demoMode ? DEMO_PLANTS : [];\n  const displayRobot = robotMarker ?? (demoMode ? DEMO_ROBOT : null);\n  const hasAnyMap = displayPlants.length > 0 || !!displayRobot;
   const soil = latest?.soil_moisture;
   const isWatering = latest?.relay === true;
   const statusText = latest?.status ?? "Waiting for sensor data";
@@ -146,7 +146,7 @@ export default function FieldPage() {
             <span>
               <span className="block text-sm font-semibold text-foreground dark:text-gray-100">Plant Locations</span>
               <span className="block text-xs text-muted dark:text-gray-400">
-                {plants.length > 0 ? `${plants.length} saved spot${plants.length === 1 ? "" : "s"} — shown on the map below` : "See every saved plant spot and its soil moisture"}
+                {plants.length > 0 ? `${plants.length} saved spot${plants.length === 1 ? "" : "s"} — shown on the map below` : "Demo field with sample plant locations — waiting for real GPS data"}
               </span>
             </span>
           </span>
@@ -155,7 +155,7 @@ export default function FieldPage() {
         {hasAnyMap ? (
           <Card className="overflow-hidden p-0">
             <div className="h-64 w-full">
-              <PlantsMapLoader plants={plants} onWater={() => {}} sendingIndex={null} robot={robotMarker} />
+              <PlantsMapLoader plants={displayPlants} onWater={() => {}} sendingIndex={null} robot={displayRobot} />
             </div>
           </Card>
         ) : (
