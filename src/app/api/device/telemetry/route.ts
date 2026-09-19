@@ -48,6 +48,28 @@ export async function POST(request: NextRequest) {
 
   const { error } = await supabase.from("agribot_log").insert(log);
 
+  if (!error) {
+    await supabase.from("agribot_sensor_data").insert({
+      soil_moisture: log.soil_pct,
+      temperature: log.temp_c,
+      humidity: log.hum_pct,
+      distance_cm: log.distance_cm,
+      battery_voltage: null,
+      battery_percent: null,
+      latitude: null,
+      longitude: null,
+      plant_index: null,
+    });
+    await supabase.from("agribot_status").upsert({
+      robot_id: DEVICE_ID,
+      name: "AgriBot AI",
+      updated_at: new Date().toISOString(),
+      online: true,
+      pump_status: log.relay ?? false,
+      motor_state: log.motor ?? "stopped",
+    }, { onConflict: "robot_id" });
+  }
+
   if (error) {
     return NextResponse.json(
       { error: error.message || "Telemetry write failed" },
