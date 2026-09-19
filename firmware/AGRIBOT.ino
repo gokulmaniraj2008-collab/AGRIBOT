@@ -215,7 +215,7 @@ void automaticControl() {
 
   if (distanceCm != -1 && distanceCm < STOP_DISTANCE_CM) {
     stopMotors();
-    if (irrigationAuto && soilMoisture < SOIL_LOW_THRESHOLD) {
+    if (irrigationAuto && soilMoisture < irrigationThreshold) {
       pump(true);
       delay(1500);
       pump(false);
