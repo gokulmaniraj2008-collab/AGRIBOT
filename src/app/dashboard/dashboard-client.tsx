@@ -31,14 +31,19 @@ export default function DashboardClient({
   const [homeVideos, setHomeVideos] = useState<HomeVideo[]>(initialHomeVideos);
 
   useEffect(() => {
+    const startedAt = new Date().toISOString();
+    liveSessionStartedAt.current = startedAt;
+    setReadings([]);
+
     supabase
       .from("agribot_sensor_data")
       .select("*")
+      .gte("created_at", startedAt)
       .order("created_at", { ascending: false })
       .limit(50)
       .returns<SensorReading[]>()
       .then(({ data }) => {
-        if (data) setReadings(data);
+        if (data && liveSessionStartedAt.current === startedAt) setReadings(data);
       });
 
     supabase
