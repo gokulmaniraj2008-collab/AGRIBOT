@@ -9,13 +9,13 @@ export default async function HistoryPage() {
 
   const [{ data: readings }, { data: commands }] = await Promise.all([
     supabase
-      .from("sensor_data")
+      .from("agribot_sensor_data")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50)
       .returns<SensorReading[]>(),
     supabase
-      .from("robot_commands")
+      .from("agribot_commands")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(30)
