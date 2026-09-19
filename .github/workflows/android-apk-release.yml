@@ -1,5 +1,7 @@
 name: Build AGRIBOT Android APK
 
+# Release branch trigger creates v1.0.0 automatically after the APK build.
+
 on:
   workflow_dispatch:
   push:
