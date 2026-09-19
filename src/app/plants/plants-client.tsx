@@ -148,6 +148,7 @@ function PlantRow({
   plant,
   sending,
   onWater,
+  demo = false,
 }: {
   plant: PlantWithReading;
   sending: boolean;
