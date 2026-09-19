@@ -100,20 +100,33 @@ Visit http://localhost:3000 — you'll be redirected to /login.
 
 ## How the ESP32 talks to this
 
-The ESP32 does **not** use the anon key or go through this Next.js app
-to write data. It writes directly to Supabase using the `service_role`
-key (kept only in the firmware, never in this repo or the browser):
+The physical ESP32 now uses a small device-token authentication layer:
 
-- **Telemetry** (every few seconds): ESP32 inserts a row into
-  `sensor_data`, and upserts `robot_status` (online, pump_status,
-  motor_state, mode).
-- **Commands** (polling, every 1–2s): ESP32 reads unexecuted rows from
-  `robot_commands` where `robot_id = 'agribot-01'`, acts on them, then
-  marks them `executed = true`.
+ESP32 → HTTPS /api/device/* → Supabase (server-side service role)
+                     ↑
+             AGRIBOT_DEVICE_TOKEN
 
-This dashboard only ever uses the public `anon` key plus Supabase Auth
-+ RLS — it can read status/sensor data and insert commands, nothing
-more.
+The Supabase service-role key is never stored in the ESP32 firmware. It is kept only as the server-side SUPABASE_SERVICE_ROLE_KEY environment variable in Vercel.
+
+The firmware in firmware/AGRIBOT.ino:
+- reads HC-SR04, soil moisture, DHT22, relay/pump and motor state
+- posts telemetry every few seconds to /api/device/telemetry
+- polls /api/device/commands every 1.5 seconds
+- executes dashboard commands and acknowledges them
+- reconnects to Wi-Fi when disconnected
+- supports manual/auto mode, motor commands, pump commands, servo angle, irrigation threshold and safety reset
+
+Required Vercel environment variables:
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- AGRIBOT_DEVICE_TOKEN
+
+Required firmware configuration:
+- AGRIBOT_API_URL → your deployed Vercel /api/device URL
+- DEVICE_TOKEN → the same random value configured as AGRIBOT_DEVICE_TOKEN
+
+Never commit the real device token or any Supabase service-role/secret key.
 
 ## Database schema
 
