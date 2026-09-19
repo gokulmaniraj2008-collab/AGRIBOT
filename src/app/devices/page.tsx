@@ -138,7 +138,7 @@ export default function DevicesPage() {
 
   async function loadDevices() {
     const { data } = await supabase
-      .from("robot_status")
+      .from("agribot_status")
       .select("*")
       .order("robot_id", { ascending: true })
       .returns<RobotStatus[]>();
@@ -150,7 +150,7 @@ export default function DevicesPage() {
     const entries = await Promise.all(
       robotIds.map(async (id) => {
         const { data } = await supabase
-          .from("sensor_data")
+          .from("agribot_sensor_data")
           .select("*")
           .eq("robot_id", id)
           .order("created_at", { ascending: false })
@@ -202,7 +202,7 @@ export default function DevicesPage() {
       .channel("devices_page_status")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status" },
+        { event: "*", schema: "public", table: "agribot_status" },
         (payload) => {
           const row = payload.new as RobotStatus;
           setDevices((prev) => {
@@ -226,7 +226,7 @@ export default function DevicesPage() {
       .channel("devices_page_sensors")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sensor_data" },
+        { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
         (payload) => {
           const row = payload.new as SensorReading & { robot_id?: string };
           const id = row.robot_id ?? "agribot-01";
