@@ -47,12 +47,12 @@ export default function AlertsPage() {
     (async () => {
       const [{ data: statusRow }, { data: latestRow }] = await Promise.all([
         supabase
-          .from("robot_status")
+          .from("agribot_status")
           .select("*")
           .eq("robot_id", "agribot-01")
           .single<RobotStatus>(),
         supabase
-          .from("sensor_data")
+          .from("agribot_sensor_data")
           .select("*")
           .order("created_at", { ascending: false })
           .limit(1)
