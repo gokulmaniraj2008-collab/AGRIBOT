@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 const url = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://hvnasippwadzygnaodpp.supabase.co');
 const key = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -80,6 +82,7 @@ class _HomePageState extends State<HomePage> {
       Dashboard(row: latest),
       Devices(row: latest),
       Process(row: latest),
+      Farm(row: latest),
       History(rows: rows),
     ];
     return Scaffold(
@@ -95,6 +98,7 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(icon: Icon(Icons.dashboard), label: 'Dashboard'),
           NavigationDestination(icon: Icon(Icons.memory), label: 'Devices'),
           NavigationDestination(icon: Icon(Icons.alt_route), label: 'Process'),
+          NavigationDestination(icon: Icon(Icons.map), label: 'Farm'),
           NavigationDestination(icon: Icon(Icons.history), label: 'History'),
         ],
       ),
@@ -255,4 +259,79 @@ class Empty extends StatelessWidget {
   const Empty(this.text, {super.key});
   @override
   Widget build(BuildContext context) => Center(child: Text(text));
+}
+
+
+class Farm extends StatelessWidget {
+  final Map<String, dynamic>? row;
+  const Farm({super.key, required this.row});
+
+  @override
+  Widget build(BuildContext context) {
+    final lat = (row?['latitude'] as num?)?.toDouble();
+    final lng = (row?['longitude'] as num?)?.toDouble();
+    final hasGps = lat != null && lng != null;
+    final robot = hasGps ? LatLng(lat!, lng!) : const LatLng(11.01695, 76.95585);
+    const plants = [
+      LatLng(11.01695, 76.95585),
+      LatLng(11.01720, 76.95615),
+      LatLng(11.01665, 76.95635),
+      LatLng(11.01645, 76.95565),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('Farm & Live GPS', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: 420,
+            child: FlutterMap(
+              options: MapOptions(initialCenter: robot, initialZoom: 17),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'ai.agribot.app',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: robot,
+                      width: 54,
+                      height: 54,
+                      child: const Icon(Icons.smart_toy, size: 42, color: Colors.green),
+                    ),
+                    ...plants.map((p) => Marker(
+                      point: p,
+                      width: 42,
+                      height: 42,
+                      child: const Icon(Icons.location_on, size: 36, color: Colors.orange),
+                    )),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.my_location, color: Colors.green),
+            title: Text(hasGps ? 'Live robot GPS' : 'Demo farm location'),
+            subtitle: Text(
+              'Latitude: ' + (lat?.toStringAsFixed(6) ?? robot.latitude.toStringAsFixed(6)) +
+              '\nLongitude: ' + (lng?.toStringAsFixed(6) ?? robot.longitude.toStringAsFixed(6)),
+            ),
+          ),
+        ),
+        if (!hasGps)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('Waiting for GPS coordinates from the ESP32. Demo plant markers are shown until live GPS is available.'),
+          ),
+      ],
+    );
+  }
 }
