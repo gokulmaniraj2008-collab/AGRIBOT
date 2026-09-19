@@ -108,13 +108,6 @@ export default function InsightsPage() {
   // Connectivity
   const isStale = status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
   const online = (status?.online ?? false) && !isStale;
-  signals.push({
-    icon: Bot, color: online ? "#16a34a" : "#6b7583", tone: online ? "success" : "muted",
-    title: online ? "Robot is online" : "Robot is offline",
-    detail: online
-      ? `Mode: ${status?.mode === "auto" ? "Auto" : "Manual"} — reporting normally.`
-      : "No recent heartbeat — check power and connectivity.",
-  });
 
   // Health score — same rule-of-thumb scoring as /recommendations, only
   // counting metrics the robot has actually reported.
