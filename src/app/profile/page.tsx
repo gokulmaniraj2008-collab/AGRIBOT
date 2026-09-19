@@ -8,6 +8,7 @@ import { uploadImageToCloudinary } from "@/lib/cloudinary-image";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge, SectionHeading } from "@/components/ui-kit";
 import type { SensorReading } from "@/lib/types";
+import { formatAgriBotTime } from "@/lib/time";
 import { User, LogOut, Bot, Info, ShieldCheck, ChevronRight, Camera, History, Activity, GitBranch } from "lucide-react";
 
 const MORE_LINKS = [
@@ -106,7 +107,7 @@ export default function ProfilePage() {
           <div className="space-y-2.5">
             <Card className="flex items-center gap-3 p-3.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Bot className="h-4 w-4" /></span>
-              <div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground dark:text-gray-100">Connected Robot</p><p className="text-xs text-muted dark:text-gray-400">agribot-01</p></div>
+              <div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground dark:text-gray-100">Connected Robot</p><p className="text-xs text-muted dark:text-gray-400">agribot-01</p>{latestSensor?.created_at && <p className="mt-1 text-[11px] text-muted dark:text-gray-500">Latest reading: {formatAgriBotTime(latestSensor.created_at)} IST</p>}</div>
               {robotActive && <StatusBadge label="ONLINE" tone="success" />}
             </Card>
             <Card className="flex items-center gap-3 p-3.5">
