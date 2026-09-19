@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SectionHeading, ProgressRing, StatusBadge, IconTile } from "@/components/ui-kit";
-import type { RobotStatus, SensorReading } from "@/lib/types";
+import type { SensorReading } from "@/lib/types";
 import {
   Droplets, Thermometer, Battery, Bug, Sparkles, Bot,
 } from "lucide-react";
@@ -20,7 +20,6 @@ type Signal = {
 export default function InsightsPage() {
   const supabase = createClient();
   const [latest, setLatest] = useState<SensorReading | null>(null);
-  const [status, setStatus] = useState<RobotStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,15 +30,9 @@ export default function InsightsPage() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle<SensorReading>(),
-      supabase
-        .from("agribot_status")
-        .select("*")
-        .eq("robot_id", "agribot-01")
-        .single<RobotStatus>(),
-    ]).then(([{ data: latestRow }, { data: statusRow }]) => {
+    ]).then(([{ data: latestRow }]) => {
       if (cancelled) return;
       if (latestRow) setLatest(latestRow);
-      if (statusRow) setStatus(statusRow);
     });
     return () => {
       cancelled = true;
@@ -105,24 +98,16 @@ export default function InsightsPage() {
     }
   }
 
-  // Connectivity
-  const isStale = status?.updated_at && Date.now() - new Date(status.updated_at).getTime() > 30_000;
-  const online = (status?.online ?? false) && !isStale;
-
-  // Health score — same rule-of-thumb scoring as /recommendations, only
-  // counting metrics the robot has actually reported.
-  const checks: boolean[] = [];
-  if (latest?.soil_moisture != null) checks.push(latest.soil_moisture >= 30 && latest.soil_moisture <= 85);
-  if (latest?.temperature != null) checks.push(latest.temperature <= 32);
-  if (latest?.battery_percent != null) checks.push(latest.battery_percent >= 25);
-  if (status) checks.push(online);
-
-  const score = checks.length
-    ? Math.round((checks.filter(Boolean).length / checks.length) * 100)
-    : null;
-
-  const scoreColor = score == null ? "#6b7583" : score >= 80 ? "#16a34a" : score >= 50 ? "#f59e0b" : "#ef4444";
-  const scoreLabel = score == null ? "No data yet" : score >= 80 ? "Good" : score >= 50 ? "Needs attention" : "At risk";
+  const demo = !latest;
+  const demoSignals: Signal[] = [
+    { icon: Droplets, color: "#0ea5e9", tone: "success", title: "Soil moisture is healthy", detail: "42% — sample field reading is within the normal demo range." },
+    { icon: Thermometer, color: "#f97316", tone: "warning", title: "Temperature needs monitoring", detail: "32.5°C — sample reading is slightly elevated in this demo." },
+    { icon: Battery, color: "#16a34a", tone: "success", title: "Robot battery is ready", detail: "78% — sample battery level is sufficient for normal operation." },
+    { icon: Sparkles, color: "#16a34a", tone: "success", title: "Irrigation window detected", detail: "Plant 2 is at 28% soil moisture in the demo field and would be considered for watering." },
+  ];
+  const displayedSignals = demo ? demoSignals : signals;
+  const score = demo ? 84 : null;
+  const scoreLabel = demo ? "Demo — Good" : "No data yet";
 
   return (
     <DashboardShell title="AI Insights" subtitle="Farm-wide summary, generated from live sensor data">
@@ -140,9 +125,7 @@ export default function InsightsPage() {
             </p>
             <p className="mt-1 text-base font-semibold">{scoreLabel}</p>
             <p className="mt-0.5 text-xs text-white/80">
-              {checks.length > 0
-                ? `Based on ${checks.length} live metric${checks.length > 1 ? "s" : ""} the robot is currently reporting.`
-                : "Waiting on sensor readings to calculate a score."}
+              {demo ? "Sample AI analysis for demonstration — not live robot data." : "Waiting on sensor readings to calculate a score."}
             </p>
           </div>
         </section>
@@ -150,7 +133,7 @@ export default function InsightsPage() {
         <div className="mt-4">
           <SectionHeading eyebrow="Signals" title="What AI Is Watching" />
           <div className="flex flex-col gap-2.5">
-            {signals.map((s, i) => (
+            {displayedSignals.map((s, i) => (
               <div
                 key={i}
                 className="flex items-start gap-3 rounded-2xl border border-border bg-white p-3.5 shadow-sm dark:border-gray-800 dark:bg-gray-900"
@@ -168,7 +151,7 @@ export default function InsightsPage() {
                 </div>
               </div>
             ))}
-            {signals.length === 0 && (
+            {!demo && displayedSignals.length === 0 && (
               <p className="rounded-2xl border border-dashed border-border p-6 text-center text-xs text-muted dark:border-gray-700 dark:text-gray-400">
                 No sensor data reported yet — insights will appear once the robot starts sending readings.
               </p>
@@ -176,14 +159,13 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-dashed border-border bg-surface p-4 text-center dark:border-gray-700 dark:bg-gray-900">
-          <Bug className="mx-auto h-5 w-5 text-muted dark:text-gray-500" />
-          <p className="mt-1.5 text-xs font-medium text-foreground dark:text-gray-100">
-            Pest & disease detection coming soon
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center dark:border-amber-900/40 dark:bg-amber-950/20">
+          <Bot className="mx-auto h-5 w-5 text-amber-600" />
+          <p className="mt-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+            DEMO AI ANALYSIS
           </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted dark:text-gray-400">
-            This card will show real AI plant-image analysis results once the ESP32-CAM feed is
-            connected — see the AI Plant Analysis page for image-based checks available today.
+          <p className="mt-1 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+            Sample insights are shown for presentation. Live AI signals will automatically replace these demo details when the robot sends real sensor data.
           </p>
         </div>
       </>
