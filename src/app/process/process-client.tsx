@@ -34,18 +34,29 @@ function modeOf(status: string | null, soil: number | null, relay: boolean | nul
 }
 
 function activeStep(r: SensorReading | null, l: AgriBotLogRow | null) {
-  const status = r?.status || l?.status || null;
+  const status = (r?.status || l?.status || "").trim();
+  const s = status.toUpperCase();
   const soil = r?.soil_moisture ?? l?.soil_pct ?? null;
   const distance = r?.distance_cm ?? l?.distance_cm ?? null;
-  const mode = modeOf(status, soil, r?.relay ?? l?.relay ?? null);
-  if (mode === "watering") return 11;
-  if (mode === "forward") return 15;
-  if (mode === "reverse") return 3;
-  if (mode === "obstacle" || (distance != null && distance < 15)) return 5;
-  if (mode === "servo") return 7;
-  if (mode === "dry") return 10;
-  if (mode === "stopped" && distance != null && distance < 15) return 6;
-  if (soil != null) return 9;
+  const relay = r?.relay ?? l?.relay ?? false;
+
+  // Map the ESP32 status messages to the actual firmware sequence.
+  // The returned index is the real current step in STEPS.
+  if (/PROCESS COMPLETE|DONE|FINAL STOP|MOTOR STOP.*DONE|SYSTEM STOPPED/.test(s)) return 16;
+  if (/FORWARD/.test(s)) return 15;
+  if (/SERVO.*0|SERVO.*HOME/.test(s)) return 14;
+  if (/PUMP OFF|WATERING END|SOIL OK|TIMEOUT/.test(s)) return 13;
+  if (/READ SOIL AGAIN|RECHECK/.test(s)) return 12;
+  if (/WATERING|PUMP ON/.test(s) || relay) return 11;
+  if (/SOIL.*30|DRY|READ SOIL|SOIL MOISTURE/.test(s) || (soil != null && soil < 30)) return 10;
+  if (/WAIT.*5|5.*SEC/.test(s)) return 8;
+  if (/SERVO.*90/.test(s)) return 7;
+  if (/MOTOR STOP|OBSTACLE/.test(s) && distance != null && distance < 15) return 6;
+  if (/OBSTACLE/.test(s) || (distance != null && distance < 15)) return 5;
+  if (/ULTRASONIC|DISTANCE/.test(s)) return 4;
+  if (/REVERSE/.test(s)) return 3;
+  if (/STOP.*3|3.*SEC/.test(s)) return 2;
+  if (/ESP32|START|POWER/.test(s)) return 1;
   return 2;
 }
 
