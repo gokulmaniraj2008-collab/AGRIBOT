@@ -366,7 +366,7 @@ export default function DevicePage() {
                 </p>
               </div>
             </div>
-            <StatusBadge label={heartbeatOnline ? "Online" : "Offline"} tone={heartbeatOnline ? "success" : "muted"} />
+            {heartbeatOnline && <StatusBadge label="Online" tone="success" />}
           </div>
         </Card>
 
