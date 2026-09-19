@@ -117,6 +117,45 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+class WebsitePage extends StatelessWidget {
+  final String page;
+  final Map<String, dynamic>? row;
+  final List<Map<String, dynamic>> rows;
+  const WebsitePage({super.key, required this.page, required this.row, required this.rows});
+
+  String get title {
+    const titles = {'profile':'Profile','logs':'Robot Logs','device':'Device','alerts':'Alerts','analytics':'Analytics','insights':'Insights','assistant':'AI Assistant','recommendations':'Recommendations','plants':'Plants','camera':'Camera','welcome':'Welcome'};
+    return titles[page] ?? 'AGRIBOT';
+  }
+
+  IconData get icon {
+    const icons = {'profile':Icons.person,'logs':Icons.article,'device':Icons.smart_toy,'alerts':Icons.notifications,'analytics':Icons.analytics,'insights':Icons.lightbulb,'assistant':Icons.auto_awesome,'recommendations':Icons.recommend,'plants':Icons.grass,'camera':Icons.camera_alt,'welcome':Icons.waving_hand};
+    return icons[page] ?? Icons.dashboard;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = <Widget>[InfoCard(title:title, icon:icon, body:_description())];
+    if (page == 'logs') {
+      cards.addAll(rows.take(20).map((r) => InfoCard(title:(r['status'] ?? 'Sensor update').toString(), icon:Icons.event_note, body:(r['created_at'] ?? '—').toString() + '\nSoil: ' + (r['soil_moisture'] ?? '—').toString() + '%')));
+    } else if (page == 'analytics') {
+      cards.add(InfoCard(title:'Live readings', icon:Icons.data_usage, body:rows.length.toString() + ' sensor readings loaded from Supabase.'));
+    } else if (page == 'alerts') {
+      cards.add(InfoCard(title:'Current robot status', icon:Icons.notifications_active, body:row == null ? 'Waiting for sensor data.' : (row!['status'] ?? 'No active status').toString()));
+    } else if (page == 'plants') {
+      cards.addAll(const [InfoCard(title:'Plant zone 01',icon:Icons.location_on,body:'11.016950, 76.955850'),InfoCard(title:'Plant zone 02',icon:Icons.location_on,body:'11.017200, 76.956150'),InfoCard(title:'Plant zone 03',icon:Icons.location_on,body:'11.016650, 76.956350'),InfoCard(title:'Plant zone 04',icon:Icons.location_on,body:'11.016450, 76.955650')]);
+    } else if (page == 'camera') {
+      cards.add(const InfoCard(title:'ESP32-CAM',icon:Icons.videocam_off,body:'Camera preview area. Connect the camera endpoint to display live frames.'));
+    }
+    return ListView(padding:const EdgeInsets.all(16),children:cards.map((w)=>Padding(padding:const EdgeInsets.only(bottom:12),child:w)).toList());
+  }
+
+  String _description() {
+    const descriptions = {'profile':'AGRIBOT operator profile, project information and mobile app settings.','logs':'Operational events and recent robot telemetry from the website dashboard.','device':'ESP32 controller, motor, pump and connection information.','alerts':'Robot and field conditions that need attention.','analytics':'Sensor statistics and live monitoring data.','insights':'Readable interpretation of current farm telemetry.','assistant':'AGRIBOT assistant for robot status, irrigation and sensor questions.','recommendations':'Suggestions based on current sensor thresholds and robot state.','plants':'Plant zones and farm locations used by the Field page.','camera':'ESP32-CAM monitoring and preview.','welcome':'Welcome to the AGRIBOT smart farming dashboard.'};
+    return descriptions[page] ?? 'AGRIBOT website page mirrored in the mobile app.';
+  }
+}
+
 class Dashboard extends StatelessWidget {
   final Map<String, dynamic>? row;
   const Dashboard({super.key, required this.row});
