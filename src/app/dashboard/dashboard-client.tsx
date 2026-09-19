@@ -123,16 +123,18 @@ export default function DashboardClient({
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <DashboardShell title="AgriBot AI" subtitle="Field ID: —" online={active} isAdmin={isAdmin}>
+    <DashboardShell title="AgriBot AI" subtitle="Field ID: —" isAdmin={isAdmin}>
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h2 className="text-xl font-extrabold tracking-tight text-foreground dark:text-gray-100">
             {greeting} 👋
           </h2>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted dark:text-gray-400">
-            <span>Farm status:</span>
-            <StatusBadge label={active ? "Operational" : "Offline"} tone={active ? "success" : "muted"} />
-          </div>
+          {active && (
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted dark:text-gray-400">
+              <span>Farm status:</span>
+              <StatusBadge label="Operational" tone="success" />
+            </div>
+          )}
         </div>
         {lastUpdated && (
           <p className="mt-1 shrink-0 text-[11px] text-muted dark:text-gray-400">
