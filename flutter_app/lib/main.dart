@@ -45,16 +45,26 @@ class _LoginState extends State<Login>{
  Future<void> go() async {
   setState(()=>busy=true);
   try {
+   final email=e.text.trim();
+   if(email.isEmpty||p.text.isEmpty)throw const FormatException('Enter your email and password.');
    final auth=Supabase.instance.client.auth;
    if(signup){
-    await auth.signUp(email:e.text.trim(),password:p.text);
-    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Account created.')));
+    await auth.signUp(email:email,password:p.text).timeout(const Duration(seconds:20));
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Account created. Check your email if verification is required.')));
    } else {
-    await auth.signInWithPassword(email:e.text.trim(),password:p.text);
+    await auth.signInWithPassword(email:email,password:p.text).timeout(const Duration(seconds:20));
     if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const Shell()));
    }
+  } on TimeoutException {
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Supabase login timed out. Check your internet connection and try again.')));
+  } on AuthException catch(x){
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.message)));
+  } on FormatException catch(x){
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.message)));
   } catch(x){
-   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.toString())));
+   final s=x.toString();
+   final network=s.contains('Failed host lookup')||s.contains('SocketException')||s.contains('ClientException');
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(network?'Cannot reach Supabase from this Android device. Check internet/DNS and retry.':s)));
   } finally {
    if(mounted)setState(()=>busy=false);
   }
