@@ -52,7 +52,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     supabase
-      .from("robot_status")
+      .from("agribot_status")
       .select("*")
       .eq("robot_id", "agribot-01")
       .single<RobotStatus>()
@@ -61,10 +61,10 @@ export default function ProfilePage() {
       });
 
     const channel = supabase
-      .channel("robot_status_changes_profile")
+      .channel("agribot_status_changes_profile")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status", filter: "robot_id=eq.agribot-01" },
+        { event: "*", schema: "public", table: "agribot_status", filter: "robot_id=eq.agribot-01" },
         (payload) => setRobotStatus(payload.new as RobotStatus)
       )
       .subscribe();
