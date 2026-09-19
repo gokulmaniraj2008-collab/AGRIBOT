@@ -46,22 +46,46 @@ class _LoginState extends State<Login>{
   setState(()=>busy=true);
   try {
    final auth=Supabase.instance.client.auth;
-   if(signup){await auth.signUp(email:e.text.trim(),password:p.text);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Account created.')));}
-   else {await auth.signInWithPassword(email:e.text.trim(),password:p.text);if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const Shell()));}
-  } catch(x){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.toString())));}
-  finally{if(mounted)setState(()=>busy=false);}
+   if(signup){
+    await auth.signUp(email:e.text.trim(),password:p.text);
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Account created.')));
+   } else {
+    await auth.signInWithPassword(email:e.text.trim(),password:p.text);
+    if(mounted)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const Shell()));
+   }
+  } catch(x){
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(x.toString())));
+  } finally {
+   if(mounted)setState(()=>busy=false);
+  }
  }
  @override Widget build(BuildContext c){
-   return Scaffold(body:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:430),child:Card(child:Padding(padding:const EdgeInsets.all(24),child:Column(children:[const Icon(Icons.agriculture,size:70,color:Color(0xFF16A34A)),const Text('AGRIBOT',style:TextStyle(fontSize:30,fontWeight:FontWeight.bold)),const SizedBox(height:20),TextField(controller:e,decoration:const InputDecoration(labelText:'Email',border:OutlineInputBorder())),const SizedBox(height:12),TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'Password',border:OutlineInputBorder())),const SizedBox(height:16),SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:go,child:Text(busy?'Please wait':signup?'Create account':'Sign in'))),TextButton(onPressed:()=>setState(()=>signup=!signup),child:Text(signup?'Sign in':'Create account'))]))))));
-   constraints:const BoxConstraints(maxWidth:430),
-   child:Card(child:Padding(padding:const EdgeInsets.all(24),child:Column(children:[
-    const Icon(Icons.agriculture,size:70,color:Color(0xFF16A34A)),const Text('AGRIBOT',style:TextStyle(fontSize:30,fontWeight:FontWeight.bold)),
-    const SizedBox(height:20),TextField(controller:e,decoration:const InputDecoration(labelText:'Email',border:OutlineInputBorder())),
-    const SizedBox(height:12),TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'Password',border:OutlineInputBorder())),
-    const SizedBox(height:16),SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:go,child:Text(busy?'Please wait':signup?'Create account':'Sign in'))),
-    TextButton(onPressed:()=>setState(()=>signup=!signup),child:Text(signup?'Sign in':'Create account')),
-   ]))),
-  )));
+  return Scaffold(
+   body:Center(
+    child:SingleChildScrollView(
+     padding:const EdgeInsets.all(24),
+     child:ConstrainedBox(
+      constraints:const BoxConstraints(maxWidth:430),
+      child:Card(
+       child:Padding(
+        padding:const EdgeInsets.all(24),
+        child:Column(children:[
+         const Icon(Icons.agriculture,size:70,color:Color(0xFF16A34A)),
+         const Text('AGRIBOT',style:TextStyle(fontSize:30,fontWeight:FontWeight.bold)),
+         const SizedBox(height:20),
+         TextField(controller:e,decoration:const InputDecoration(labelText:'Email',border:OutlineInputBorder())),
+         const SizedBox(height:12),
+         TextField(controller:p,obscureText:true,decoration:const InputDecoration(labelText:'Password',border:OutlineInputBorder())),
+         const SizedBox(height:16),
+         SizedBox(width:double.infinity,child:FilledButton(onPressed:busy?null:go,child:Text(busy?'Please wait':signup?'Create account':'Sign in'))),
+         TextButton(onPressed:()=>setState(()=>signup=!signup),child:Text(signup?'Sign in':'Create account')),
+        ]),
+       ),
+      ),
+     ),
+    ),
+   ),
+  );
  }
 }
 class Shell extends StatefulWidget{const Shell({super.key});@override State<Shell> createState()=>_ShellState();}
