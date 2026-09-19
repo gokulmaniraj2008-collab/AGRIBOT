@@ -17,7 +17,7 @@ export default async function RecommendationsPage() {
   const supabase = await createClient();
 
   const { data: latest } = await supabase
-    .from("sensor_data")
+    .from("agribot_sensor_data")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(1)
