@@ -17,12 +17,10 @@ import {
 } from "recharts";
 
 export default function DashboardClient({
-  initialStatus = null,
   initialReadings = [],
   initialHomeVideos = [],
   isAdmin = false,
 }: {
-  initialStatus?: RobotStatus | null;
   initialReadings?: SensorReading[];
   initialHomeVideos?: HomeVideo[];
   isAdmin?: boolean;
