@@ -21,8 +21,8 @@
 #include <WiFiClientSecure.h>
 
 // ---------------- WiFi (2.4 GHz, needs internet) ----------------
-const char* WIFI_SSID = "YOUR_WIFI_NAME";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "AGRIBOT_WIFI";
+const char* WIFI_PASS = "12345678";
 WebServer server(80);
 
 // ---------------- Supabase (anon key only, never service_role) ----------------
