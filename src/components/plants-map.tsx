@@ -103,7 +103,7 @@ export function PlantsMap({
           <Popup>
             <div className="min-w-[160px]">
               <p className="text-xs font-semibold text-foreground">AgriBot AI — Unit 01</p>
-              <p className="text-xs text-muted">{robot.online ? "Online" : "Offline"}</p>
+              {robot.online && <p className="text-xs text-muted">Online</p>}
               <div className="mt-2 flex gap-2">
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${robot.latitude},${robot.longitude}`}
