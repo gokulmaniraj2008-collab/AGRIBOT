@@ -1,7 +1,7 @@
 name: agribot_app
 description: AGRIBOT mobile dashboard built with Flutter and Dart.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ">=3.9.0 <4.0.0"
@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   supabase_flutter: ^2.17.2
   cupertino_icons: ^1.0.8
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:
