@@ -27,7 +27,8 @@ export default function DashboardClient({
 }) {
   const supabase = createClient();
 
-  const [readings, setReadings] = useState<SensorReading[]>([]);\n  const liveSessionStartedAt = useRef<string | null>(null);
+  const [readings, setReadings] = useState<SensorReading[]>([]);
+  const liveSessionStartedAt = useRef<string | null>(null);
   const [homeVideos, setHomeVideos] = useState<HomeVideo[]>(initialHomeVideos);
 
   useEffect(() => {
@@ -63,7 +64,11 @@ export default function DashboardClient({
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
-        (payload) => {\n          const reading = payload.new as SensorReading;\n          if (!liveSessionStartedAt.current || reading.created_at < liveSessionStartedAt.current) return;\n          setReadings((prev) => [reading, ...prev].slice(0, 50));\n        }
+        (payload) => {
+          const reading = payload.new as SensorReading;
+          if (!liveSessionStartedAt.current || reading.created_at < liveSessionStartedAt.current) return;
+          setReadings((prev) => [reading, ...prev].slice(0, 50));
+        }
       )
       .subscribe();
     return () => {
