@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 const url = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://hvnasippwadzygnaodpp.supabase.co');
 const key = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -23,7 +24,13 @@ class ConfigPage extends StatelessWidget {
   Widget build(BuildContext context) => const Scaffold(
     body: Center(child: Padding(
       padding: EdgeInsets.all(24),
-      child: Text('Run with --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_KEY'),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        SvgPicture.asset('assets/agribot_logo.svg', width: 110, height: 110),
+        const SizedBox(height: 18),
+        const Text('AGRIBOT', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text('Build configuration required', style: TextStyle(fontSize: 16)),
+      ]),
     )),
   );
 }
@@ -87,7 +94,11 @@ class _HomePageState extends State<HomePage> {
     ];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🌱 AGRIBOT'),
+        title: Row(children: [
+          SvgPicture.asset('assets/agribot_logo.svg', width: 34, height: 34),
+          const SizedBox(width: 8),
+          const Text('AGRIBOT'),
+        ]),
         actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))],
       ),
       body: pages[tab],
@@ -116,7 +127,11 @@ class Dashboard extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Live Sensor Data', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        Row(children: [
+          SvgPicture.asset('assets/agribot_logo.svg', width: 54, height: 54),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Live Sensor Data', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+        ]),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
