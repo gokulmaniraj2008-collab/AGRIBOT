@@ -25,7 +25,7 @@ export default function DashboardClient({
   initialHomeVideos?: HomeVideo[];
   isAdmin?: boolean;
 }) {
-  const supabase = createClient();
+  const supabase = useRef(createClient()).current;
 
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const liveSessionStartedAt = useRef<string | null>(null);
