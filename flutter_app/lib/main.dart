@@ -21,7 +21,7 @@ Future<void> main() async {
 class ConfigPage extends StatelessWidget {
   const ConfigPage({super.key});
   @override
-  Widget build(BuildContext context) => const Scaffold(
+  Widget build(BuildContext context) => Scaffold(
     body: Center(child: Padding(
       padding: EdgeInsets.all(24),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
