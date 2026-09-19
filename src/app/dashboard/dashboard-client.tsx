@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { HomeVideo, RobotStatus, SensorReading } from "@/lib/types";
+import { formatAgriBotTimeOnly } from "@/lib/time";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatCard, AIBanner, SectionHeading, StatusBadge } from "@/components/ui-kit";
 import VideoQuickBox from "@/components/video-quick-box";
@@ -104,13 +105,11 @@ export default function DashboardClient({
     chronological.map((r) => ({ v: r[key] as number | null }));
 
   const chartData = chronological.map((r) => ({
-    time: new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    time: formatAgriBotTimeOnly(r.created_at).slice(0, 5),
     soil: r.soil_moisture,
   }));
 
-  const lastUpdated = status?.updated_at
-    ? new Date(status.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
+  const lastUpdated = latest?.created_at ? formatAgriBotTimeOnly(latest.created_at) : null;
 
   const aiTip =
     latest?.soil_moisture != null && latest.soil_moisture < 30
