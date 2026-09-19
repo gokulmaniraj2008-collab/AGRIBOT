@@ -10,6 +10,9 @@ export type SensorReading = {
   latitude: number | null;
   longitude: number | null;
   plant_index: number | null;
+  relay: boolean | null;
+  motor: string | null;
+  status: string | null;
 };
 
 export type RobotStatus = {
@@ -158,4 +161,17 @@ export type PlantAnalysis = {
   severity: "Low" | "Moderate" | "High" | "None" | null;
   recommended_action: string | null;
   raw_response: string | null;
+};
+
+
+export type AgriBotLogRow = {
+  id: number;
+  created_at: string;
+  status: string | null;
+  distance_cm: number | null;
+  soil_pct: number | null;
+  temp_c: number | null;
+  hum_pct: number | null;
+  relay: boolean | null;
+  motor: string | null;
 };
