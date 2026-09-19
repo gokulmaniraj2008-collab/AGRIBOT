@@ -18,7 +18,9 @@ function authorized(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!authorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await request.json().catch(() => null);
   if (!body || body.robot_id !== DEVICE_ID) {
@@ -26,49 +28,29 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = adminClient();
-  const sensor = {
-    robot_id: DEVICE_ID,
-    soil_moisture: Number.isFinite(body.soil_moisture) ? body.soil_moisture : null,
-    temperature: Number.isFinite(body.temperature) ? body.temperature : null,
-    humidity: Number.isFinite(body.humidity) ? body.humidity : null,
-    distance_cm: Number.isFinite(body.distance_cm) ? body.distance_cm : null,
-    battery_voltage: Number.isFinite(body.battery_voltage) ? body.battery_voltage : null,
-    battery_percent: Number.isFinite(body.battery_percent) ? body.battery_percent : null,
-    latitude: Number.isFinite(body.latitude) ? body.latitude : null,
-    longitude: Number.isFinite(body.longitude) ? body.longitude : null,
-    plant_index: Number.isInteger(body.plant_index) ? body.plant_index : null,
+
+  // Keep the database contract intentionally small: the ESP32 telemetry
+  // is stored in the public.agribot_log table.
+  const log = {
+    status: body.status === "STOPPED" ? "STOPPED" : "RUNNING",
+    distance_cm: Number.isFinite(body.distance_cm) ? Math.round(body.distance_cm) : null,
+    soil_pct: Number.isFinite(body.soil_moisture)
+      ? Math.max(0, Math.min(100, Math.round(body.soil_moisture)))
+      : null,
+    temp_c: Number.isFinite(body.temperature) ? body.temperature : null,
+    hum_pct: Number.isFinite(body.humidity) ? body.humidity : null,
+    relay: typeof body.pump_status === "boolean" ? body.pump_status : null,
+    motor:
+      typeof body.motor_state === "string" && body.motor_state.length <= 32
+        ? body.motor_state
+        : "stopped",
   };
 
-  const status = {
-    robot_id: DEVICE_ID,
-    name: "AgriBot 01",
-    updated_at: new Date().toISOString(),
-    online: true,
-    mode: body.mode === "auto" ? "auto" : "manual",
-    pump_status: !!body.pump_status,
-    motor_state: ["stopped", "forward", "backward", "left", "right"].includes(body.motor_state)
-      ? body.motor_state
-      : "stopped",
-    speed_value: Number.isFinite(body.speed_value) ? Math.max(0, Math.min(255, body.speed_value)) : 0,
-    irrigation_auto: !!body.irrigation_auto,
-    irrigation_threshold: Number.isFinite(body.irrigation_threshold) ? body.irrigation_threshold : 30,
-    gps_fix: !!body.gps_fix,
-    gps_satellites: Number.isInteger(body.gps_satellites) ? body.gps_satellites : null,
-    last_latitude: Number.isFinite(body.latitude) ? body.latitude : null,
-    last_longitude: Number.isFinite(body.longitude) ? body.longitude : null,
-    safety_stopped: !!body.safety_stopped,
-    last_fault: body.last_fault || null,
-    last_fault_at: body.last_fault_at || null,
-  };
+  const { error } = await supabase.from("agribot_log").insert(log);
 
-  const [{ error: sensorError }, { error: statusError }] = await Promise.all([
-    supabase.from("sensor_data").insert(sensor),
-    supabase.from("robot_status").upsert(status, { onConflict: "robot_id" }),
-  ]);
-
-  if (sensorError || statusError) {
+  if (error) {
     return NextResponse.json(
-      { error: sensorError?.message ?? statusError?.message ?? "Telemetry write failed" },
+      { error: error.message || "Telemetry write failed" },
       { status: 500 }
     );
   }
