@@ -319,7 +319,7 @@ function FilterBar({ active, onChange }: { active: LogFilter; onChange: (f: LogF
  * Admin-only control. Visible to everyone in the component tree, but only
  * ever renders its button for a confirmed admin — regular users see
  * nothing extra, and the actual delete is still gated by Supabase RLS on
- * the robot_logs table (the UI check alone doesn't grant access).
+ * the agribot_logs table (the UI check alone doesn't grant access).
  */
 function AdminDeleteAllLogs({
   isAdmin,
@@ -377,11 +377,11 @@ export default function LogsClient({ initialLogs }: { initialLogs: RobotLog[] })
 
     setDeleting(true);
     setDeleteError(null);
-    // robot_logs has no natural "delete everything" filter, so this uses
+    // agribot_logs has no natural "delete everything" filter, so this uses
     // the standard Supabase workaround (id >= 0 matches every row) rather
     // than an unfiltered delete. Actual permission is enforced by the
     // table's RLS delete policy, not by this UI check.
-    const { error: err } = await supabase.from("robot_logs").delete().gte("id", 0);
+    const { error: err } = await supabase.from("agribot_logs").delete().gte("id", 0);
     if (err) {
       setDeleteError(err.message);
     } else {
@@ -392,10 +392,10 @@ export default function LogsClient({ initialLogs }: { initialLogs: RobotLog[] })
 
   useEffect(() => {
     const channel = supabase
-      .channel("robot_logs_activity_feed")
+      .channel("agribot_logs_activity_feed")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "robot_logs" },
+        { event: "INSERT", schema: "public", table: "agribot_logs" },
         (payload) => {
           const incoming = payload.new as RobotLog;
           setLogs((prev) => {
