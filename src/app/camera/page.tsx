@@ -83,12 +83,12 @@ export default function CameraPage() {
               <p className="text-xs font-medium text-white/70">No camera feed connected</p>
             </div>
           )}
-          <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/80">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${isLive ? "bg-green-400" : "bg-gray-400"}`}
-            />
-            {isLive ? "LIVE" : "OFFLINE"}
-          </span>
+          {isLive && (
+            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+              LIVE
+            </span>
+          )}
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2">
