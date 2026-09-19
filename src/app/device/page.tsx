@@ -160,27 +160,27 @@ export default function DevicePage() {
     (async () => {
       const [{ data: statusRow }, { data: camStatusRow }, { data: latestRow }, { data: msgRows }, { data: cmdRows }] =
         await Promise.all([
-          supabase.from("robot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
+          supabase.from("agribot_status").select("*").eq("robot_id", ROBOT_ID).single<RobotStatus>(),
           supabase
-            .from("robot_status")
+            .from("agribot_status")
             .select("*")
             .eq("robot_id", CAM_ROBOT_ID)
             .maybeSingle<RobotStatus>(),
           supabase
-            .from("sensor_data")
+            .from("agribot_sensor_data")
             .select("*")
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle<SensorReading>(),
           supabase
-            .from("device_messages")
+            .from("agribot_messages")
             .select("*")
             .eq("robot_id", ROBOT_ID)
             .order("created_at", { ascending: false })
             .limit(MESSAGE_ROWS)
             .returns<DeviceMessage[]>(),
           supabase
-            .from("robot_commands")
+            .from("agribot_commands")
             .select("*")
             .eq("robot_id", ROBOT_ID)
             .order("created_at", { ascending: false })
@@ -199,13 +199,13 @@ export default function DevicePage() {
     };
   }, [supabase]);
 
-  // Realtime: robot_status
+  // Realtime: agribot_status
   useEffect(() => {
     const channel = supabase
       .channel("device_page_status")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${ROBOT_ID}` },
+        { event: "*", schema: "public", table: "agribot_status", filter: `robot_id=eq.${ROBOT_ID}` },
         (payload) => setStatus(payload.new as RobotStatus)
       )
       .subscribe();
@@ -214,7 +214,7 @@ export default function DevicePage() {
     };
   }, [supabase]);
 
-  // Realtime: robot_status for the camera's own heartbeat row
+  // Realtime: agribot_status for the camera's own heartbeat row
   // (separate row/id from the main robot — see CAM_ROBOT_ID note in
   // esp32cam_supabase_upload.ino). Gives us camera_ip without polling.
   useEffect(() => {
@@ -222,7 +222,7 @@ export default function DevicePage() {
       .channel("device_page_cam_status")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_status", filter: `robot_id=eq.${CAM_ROBOT_ID}` },
+        { event: "*", schema: "public", table: "agribot_status", filter: `robot_id=eq.${CAM_ROBOT_ID}` },
         (payload) => setCameraStatus(payload.new as RobotStatus)
       )
       .subscribe();
@@ -231,13 +231,13 @@ export default function DevicePage() {
     };
   }, [supabase]);
 
-  // Realtime: sensor_data
+  // Realtime: agribot_sensor_data
   useEffect(() => {
     const channel = supabase
       .channel("device_page_sensors")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sensor_data" },
+        { event: "INSERT", schema: "public", table: "agribot_sensor_data" },
         (payload) => setLatest(payload.new as SensorReading)
       )
       .subscribe();
@@ -246,13 +246,13 @@ export default function DevicePage() {
     };
   }, [supabase]);
 
-  // Realtime: device_messages
+  // Realtime: agribot_messages
   useEffect(() => {
     const channel = supabase
       .channel("device_page_messages")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "device_messages", filter: `robot_id=eq.${ROBOT_ID}` },
+        { event: "INSERT", schema: "public", table: "agribot_messages", filter: `robot_id=eq.${ROBOT_ID}` },
         (payload) => {
           const row = payload.new as DeviceMessage;
           setMessages((prev) => [row, ...prev].slice(0, MESSAGE_ROWS));
@@ -264,13 +264,13 @@ export default function DevicePage() {
     };
   }, [supabase]);
 
-  // Realtime: robot_commands
+  // Realtime: agribot_commands
   useEffect(() => {
     const channel = supabase
       .channel("device_page_commands")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "robot_commands", filter: `robot_id=eq.${ROBOT_ID}` },
+        { event: "*", schema: "public", table: "agribot_commands", filter: `robot_id=eq.${ROBOT_ID}` },
         (payload) => {
           const row = payload.new as RobotCommandRow;
           setCommands((prev) => {
