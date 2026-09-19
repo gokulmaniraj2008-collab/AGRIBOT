@@ -101,7 +101,10 @@ export default function FieldPage() {
       }
     : null;
 
-  const demoMode = plants.length === 0 && !robotHasGps;\n  const displayPlants = plants.length > 0 ? plants : demoMode ? DEMO_PLANTS : [];\n  const displayRobot = robotMarker ?? (demoMode ? DEMO_ROBOT : null);\n  const hasAnyMap = displayPlants.length > 0 || !!displayRobot;
+  const demoMode = plants.length === 0 && !robotHasGps;
+  const displayPlants = plants.length > 0 ? plants : demoMode ? DEMO_PLANTS : [];
+  const displayRobot = robotMarker ?? (demoMode ? DEMO_ROBOT : null);
+  const hasAnyMap = displayPlants.length > 0 || !!displayRobot;
   const soil = latest?.soil_moisture;
   const isWatering = latest?.relay === true;
   const statusText = latest?.status ?? "Waiting for sensor data";
