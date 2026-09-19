@@ -8,7 +8,7 @@ export default async function AnalyticsPage() {
   const supabase = await createClient();
 
   const { data: readings } = await supabase
-    .from("sensor_data")
+    .from("agribot_sensor_data")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(50)
