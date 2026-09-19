@@ -175,10 +175,7 @@ export default function ProfilePage() {
                 </p>
                 <p className="text-xs text-muted dark:text-gray-400">agribot-01</p>
               </div>
-              <StatusBadge
-                label={robotActive ? "ONLINE" : "OFFLINE"}
-                tone={robotActive ? "success" : "muted"}
-              />
+              {robotActive && <StatusBadge label="ONLINE" tone="success" />}
             </Card>
 
             <Card className="flex items-center gap-3 p-3.5">
