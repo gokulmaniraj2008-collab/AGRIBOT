@@ -11,6 +11,8 @@ import type { SensorReading } from "@/lib/types";
 import { formatAgriBotTime } from "@/lib/time";
 import { User, LogOut, Bot, Info, ShieldCheck, ChevronRight, Camera, History, Activity, GitBranch } from "lucide-react";
 
+const ADMIN_EMAIL = "gokulmaniraj2008@gmail.com";
+
 const MORE_LINKS = [
   { href: "/dashboard", label: "Live Sensor Data", desc: "View real-time robot sensor readings", icon: Activity },
   { href: "/process", label: "Robot Process", desc: "See the autonomous process and live step status", icon: GitBranch },
@@ -32,11 +34,23 @@ export default function ProfilePage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
-      setEmail(data.user?.email ?? null);
-      setUserId(data.user?.id ?? null);
-      if (data.user) {
-        const { data: profile } = await supabase.from("profiles").select("role, avatar_url").eq("id", data.user.id).single<{ role: string; avatar_url: string | null }>();
-        setIsAdmin(profile?.role === "admin");
+      const user = data.user;
+      const userEmail = user?.email ?? null;
+      setEmail(userEmail);
+      setUserId(user?.id ?? null);
+
+      if (user) {
+        const normalizedEmail = userEmail?.trim().toLowerCase();
+        let admin = normalizedEmail === ADMIN_EMAIL;
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, avatar_url")
+          .eq("id", user.id)
+          .single<{ role: string; avatar_url: string | null }>();
+
+        admin = admin || profile?.role === "admin";
+        setIsAdmin(admin);
         setAvatarUrl(profile?.avatar_url ?? null);
       }
     });
@@ -114,7 +128,18 @@ export default function ProfilePage() {
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Info className="h-4 w-4" /></span>
               <div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground dark:text-gray-100">About</p><p className="text-xs text-muted dark:text-gray-400">AgriBot AI Dashboard v1</p></div>
             </Card>
-            {isAdmin && <Link href="/admin"><Card className="flex items-center gap-3 p-3.5 transition active:scale-[0.99]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" /></span><span className="flex-1 text-sm font-medium text-foreground dark:text-gray-100">Admin Panel</span><ChevronRight className="h-4 w-4 text-muted" /></Card></Link>}
+            {isAdmin && (
+              <Link href="/admin">
+                <Card className="flex items-center gap-3 p-3.5 transition active:scale-[0.99]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" /></span>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground dark:text-gray-100">Admin Panel</p>
+                    <p className="text-xs text-muted dark:text-gray-400">Manage robot data and administration</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted" />
+                </Card>
+              </Link>
+            )}
           </div>
         </div>
 
