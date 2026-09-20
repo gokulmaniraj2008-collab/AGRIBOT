@@ -36,7 +36,11 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const { count, error } = await supabase
+  const { count, error } = await createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return request.cookies.getAll(); }, setAll() {} } }
+  )
     .from("agribot_sensor_data")
     .delete({ count: "exact" })
     .not("id", "is", null);
