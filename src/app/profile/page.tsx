@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { uploadImageToCloudinary } from "@/lib/cloudinary-image";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatusBadge, SectionHeading } from "@/components/ui-kit";
 import type { SensorReading } from "@/lib/types";
@@ -80,10 +79,28 @@ export default function ProfilePage() {
     setError(null);
     setUploading(true);
     try {
-      const url = await uploadImageToCloudinary(file, "agribot/avatars");
-      const { error: err } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", userId);
-      if (err) throw err;
-      setAvatarUrl(url);
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+      if (!allowedTypes.includes(file.type)) throw new Error("Please choose a JPG, PNG, WebP, or HEIC image.");
+      if (file.size > 5 * 1024 * 1024) throw new Error("Profile photo must be 5 MB or smaller.");
+
+      const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${userId}/avatar-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrl } = supabase.storage.from("avatars").getPublicUrl(path);
+      const url = publicUrl.publicUrl;
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert({ id: userId, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict: "id" });
+
+      if (profileError) throw profileError;
+      setAvatarUrl(`${url}?v=${Date.now()}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
