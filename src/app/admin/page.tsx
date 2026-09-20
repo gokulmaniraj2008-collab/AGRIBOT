@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { Activity, Database, ShieldCheck, Users, RefreshCw } from "lucide-react";
+import { Activity, Database, ShieldCheck, Users, RefreshCw, Trash2 } from "lucide-react";
 
 const ADMIN_EMAIL = "gokulmaniraj2008@gmail.com";
 
@@ -26,6 +26,8 @@ export default function AdminPage() {
   const [logCount, setLogCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
 
   async function load() {
     setRefreshing(true);
@@ -42,6 +44,33 @@ export default function AdminPage() {
     setLogCount(logs.count ?? 0);
     setLoading(false);
     setRefreshing(false);
+  }
+
+  async function clearSensorReadings() {
+    if (!window.confirm("Clear all sensor readings? This permanently deletes agribot_sensor_data records. Robot logs will not be deleted.")) return;
+
+    setClearing(true);
+    setClearMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/clear-sensor-readings", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setClearMessage(result?.error ?? "Could not clear sensor readings.");
+        return;
+      }
+
+      setRows([]);
+      setClearMessage(`Cleared ${result?.deleted ?? 0} sensor readings. Robot logs were kept.`);
+    } catch {
+      setClearMessage("Could not reach the admin API. Please try again.");
+    } finally {
+      setClearing(false);
+    }
   }
 
   useEffect(() => {
@@ -69,10 +98,16 @@ export default function AdminPage() {
               <p className="mt-2 text-sm font-semibold text-foreground">{ADMIN_EMAIL}</p>
               <p className="mt-1 text-xs text-muted">Admin access is restricted to this verified account.</p>
             </div>
-            <button onClick={() => void load()} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900">
-              <RefreshCw className={refreshing ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} /> Refresh
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button onClick={() => void load()} disabled={refreshing || clearing} className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900">
+                <RefreshCw className={refreshing ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} /> Refresh
+              </button>
+              <button onClick={() => void clearSensorReadings()} disabled={clearing || refreshing} className="inline-flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger hover:bg-danger/15 disabled:opacity-60">
+                <Trash2 className={clearing ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} /> {clearing ? "Clearing…" : "Clear sensor readings"}
+              </button>
+            </div>
           </div>
+          {clearMessage && <p className="mt-3 rounded-xl border border-border bg-white px-3 py-2 text-xs text-muted dark:border-gray-700 dark:bg-gray-900">{clearMessage}</p>}
         </section>
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
