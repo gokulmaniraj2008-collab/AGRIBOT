@@ -96,7 +96,7 @@ export function DashboardShell({
               {isAdmin && <Link href="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground hover:bg-surface dark:text-gray-200 dark:hover:bg-gray-800"><ShieldCheck className="h-4 w-4" />Admin Panel</Link>}
             </aside>
           </>
-        )
+        )}
       </div>
 
       {/* Mobile bottom nav — floating pill, brand icon anchor */}
