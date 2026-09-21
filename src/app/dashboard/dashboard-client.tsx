@@ -10,7 +10,7 @@ import { Card, StatCard, AIBanner, SectionHeading } from "@/components/ui-kit";
 import VideoQuickBox from "@/components/video-quick-box";
 import {
   Droplets, Thermometer, Wind, Battery, Map, Bell, Sparkles,
-  ChevronRight, LineChart as LineChartIcon, Camera, Wifi,
+  ChevronRight, LineChart as LineChartIcon, Camera, Wifi, Gauge, Power, Ruler, CircleDot,
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -111,6 +111,13 @@ export default function DashboardClient({
   }));
 
   const lastUpdated = latest?.created_at ? formatAgriBotTimeOnly(latest.created_at) : null;
+  const isFresh = latest?.created_at
+    ? Date.now() - new Date(latest.created_at).getTime() < 30000
+    : false;
+  const leftDry = latest?.soil_left_pct != null && latest.soil_left_pct < 30;
+  const rightDry = latest?.soil_right_pct != null && latest.soil_right_pct < 30;
+  const leftPump = latest?.relay_left === true;
+  const rightPump = latest?.relay_right === true;
 
   const aiTip =
     (latest?.soil_left_pct != null && latest.soil_left_pct < 30) ||
@@ -143,6 +150,29 @@ export default function DashboardClient({
       <div className="mb-4">
         <AIBanner text={aiTip} cta="Ask AI" />
       </div>
+
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className={`flex h-10 w-10 items-center justify-center rounded-full ${isFresh ? "bg-green-500/10 text-green-600" : "bg-gray-500/10 text-gray-500"}`}>
+              <CircleDot className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-foreground dark:text-gray-100">
+                Robot {isFresh ? "Online" : "Waiting"}
+              </p>
+              <p className="text-xs text-muted dark:text-gray-400">
+                {latest?.plant_position ? `Station: ${latest.plant_position}` : "2-plant irrigation system"}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <StatusPill label="Left pump" value={leftPump ? "ON" : "OFF"} active={leftPump} />
+            <StatusPill label="Right pump" value={rightPump ? "ON" : "OFF"} active={rightPump} />
+            <StatusPill label="Motor" value={latest?.motor ?? "—"} active={false} />
+          </div>
+        </div>
+      </Card>
 
       <VideoQuickBox videos={homeVideos} />
 
@@ -189,6 +219,13 @@ export default function DashboardClient({
             color="#16a34a"
             percent={latest?.battery_percent ?? undefined}
           />
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <MiniMetric icon={Ruler} label="Left Distance" value={latest?.distance_left_cm != null ? `${latest.distance_left_cm.toFixed(0)} cm` : "—"} />
+          <MiniMetric icon={Ruler} label="Right Distance" value={latest?.distance_right_cm != null ? `${latest.distance_right_cm.toFixed(0)} cm` : "—"} />
+          <MiniMetric icon={Power} label="Left Pump" value={leftPump ? "Watering" : "Idle"} active={leftPump} />
+          <MiniMetric icon={Power} label="Right Pump" value={rightPump ? "Watering" : "Idle"} active={rightPump} />
         </div>
       </div>
 
@@ -237,6 +274,26 @@ export default function DashboardClient({
         </div>
       </div>
     </DashboardShell>
+  );
+}
+
+function MiniMetric({ icon: Icon, label, value, active = false }: { icon: React.ElementType; label: string; value: string; active?: boolean }) {
+  return (
+    <div className="rounded-xl border border-border bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${active ? "text-primary" : "text-muted"}`} />
+        <span className="text-[11px] text-muted dark:text-gray-400">{label}</span>
+      </div>
+      <p className="mt-1 text-sm font-bold text-foreground dark:text-gray-100">{value}</p>
+    </div>
+  );
+}
+
+function StatusPill({ label, value, active }: { label: string; value: string; active: boolean }) {
+  return (
+    <span className={`rounded-full border px-2.5 py-1 ${active ? "border-primary/30 bg-primary/10 text-primary" : "border-border text-muted dark:border-gray-700 dark:text-gray-400"}`}>
+      {label}: {value}
+    </span>
   );
 }
 
