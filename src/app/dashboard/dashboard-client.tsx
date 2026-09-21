@@ -314,7 +314,28 @@ function PlantCard({
   );
 }
 
-function UltrasonicCard({ label, distance, limit }: { label: string; distance: number | null | undefined; limit: number }) {\n  const blocked = distance != null && distance > 0 && distance < limit;\n  return (\n    <div className={`rounded-xl border p-3 ${blocked ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30" : "border-border bg-white dark:border-gray-900 dark:bg-gray-900"}`}>\n      <div className="flex items-center justify-between">\n        <span className="text-xs font-semibold text-foreground dark:text-gray-100">{label} ultrasonic</span>\n        <span className={`text-[10px] font-bold ${blocked ? "text-red-600" : "text-green-600"}`}>{blocked ? "STOP" : "CLEAR"}</span>\n      </div>\n      <p className="mt-2 text-xl font-extrabold text-foreground dark:text-gray-100">{distance != null ? distance.toFixed(0) : "—"} <span className="text-xs font-medium text-muted">cm</span></p>\n      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">\n        <div className={`h-full rounded-full ${blocked ? "bg-red-500" : "bg-green-500"}`} style={{ width: `${Math.min(100, distance != null && distance > 0 ? (distance / 100) * 100 : 0)}%` }} />\n      </div>\n    </div>\n  );\n}\n\nfunction Insight({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) {
+function UltrasonicCard({ label, distance, limit }: { label: string; distance: number | null | undefined; limit: number }) {
+  const blocked = distance != null && distance > 0 && distance < limit;
+  return (
+    <div className={`rounded-xl border p-3 ${blocked ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30" : "border-border bg-white dark:border-gray-900 dark:bg-gray-900"}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-foreground dark:text-gray-100">{label} ultrasonic</span>
+        <span className={`text-[10px] font-bold ${blocked ? "text-red-600" : "text-green-600"}`}>{blocked ? "STOP" : "CLEAR"}</span>
+      </div>
+      <p className="mt-2 text-xl font-extrabold text-foreground dark:text-gray-100">
+        {distance != null ? distance.toFixed(0) : "—"} <span className="text-xs font-medium text-muted">cm</span>
+      </p>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+        <div
+          className={`h-full rounded-full ${blocked ? "bg-red-500" : "bg-green-500"}`}
+          style={{ width: `${Math.min(100, distance != null && distance > 0 ? (distance / 100) * 100 : 0)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Insight({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) {
   return (
     <div className="rounded-xl border border-border bg-white p-3 dark:border-gray-800 dark:bg-gray-950">
       <div className="flex items-center gap-2 text-xs font-semibold text-foreground dark:text-gray-100">
