@@ -97,6 +97,11 @@ export default function DashboardClient({
   const rightSoil = latest?.soil_right_pct;
   const leftPump = latest?.relay_left === true;
   const rightPump = latest?.relay_right === true;
+  const obstacleLimitCm = 15;
+  const frontDistance = latest?.distance_cm;
+  const leftDistance = latest?.distance_left_cm;
+  const rightDistance = latest?.distance_right_cm;
+  const obstacleDetected = [frontDistance, leftDistance, rightDistance].some((d) => d != null && d > 0 && d < obstacleLimitCm);
 
   const aiTip =
     leftSoil != null && leftSoil < 30
@@ -229,7 +234,7 @@ export default function DashboardClient({
           <div className="space-y-3 text-sm">
             <Insight icon={Lightbulb} title="Current decision" text={aiTip} />
             <Insight icon={MapPin} title="Station" text={latest?.plant_position || "Waiting for station marker"} />
-            <Insight icon={Ruler} title="Obstacle sensing" text={`Left ${latest?.distance_left_cm?.toFixed(0) ?? "—"} cm · Right ${latest?.distance_right_cm?.toFixed(0) ?? "—"} cm`} />
+            <Insight icon={Ruler} title="Obstacle sensing" text={`Front ${frontDistance?.toFixed(0) ?? "—"} cm · Left ${leftDistance?.toFixed(0) ?? "—"} cm · Right ${rightDistance?.toFixed(0) ?? "—"} cm`} />
             {latest?.battery_percent != null && latest.battery_percent < 20 && (
               <Insight icon={ShieldAlert} title="Safety" text="Low battery: avoid starting a long mission." />
             )}
@@ -295,7 +300,7 @@ function PlantCard({
   );
 }
 
-function Insight({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) {
+function UltrasonicCard({ label, distance, limit }: { label: string; distance: number | null | undefined; limit: number }) {\n  const blocked = distance != null && distance > 0 && distance < limit;\n  return (\n    <div className={`rounded-xl border p-3 ${blocked ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30" : "border-border bg-white dark:border-gray-900 dark:bg-gray-900"}`}>\n      <div className="flex items-center justify-between">\n        <span className="text-xs font-semibold text-foreground dark:text-gray-100">{label} ultrasonic</span>\n        <span className={`text-[10px] font-bold ${blocked ? "text-red-600" : "text-green-600"}`}>{blocked ? "STOP" : "CLEAR"}</span>\n      </div>\n      <p className="mt-2 text-xl font-extrabold text-foreground dark:text-gray-100">{distance != null ? distance.toFixed(0) : "—"} <span className="text-xs font-medium text-muted">cm</span></p>\n      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">\n        <div className={`h-full rounded-full ${blocked ? "bg-red-500" : "bg-green-500"}`} style={{ width: `${Math.min(100, distance != null && distance > 0 ? (distance / 100) * 100 : 0)}%` }} />\n      </div>\n    </div>\n  );\n}\n\nfunction Insight({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) {
   return (
     <div className="rounded-xl border border-border bg-white p-3 dark:border-gray-800 dark:bg-gray-950">
       <div className="flex items-center gap-2 text-xs font-semibold text-foreground dark:text-gray-100">
