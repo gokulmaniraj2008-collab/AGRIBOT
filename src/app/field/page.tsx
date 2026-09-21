@@ -123,18 +123,22 @@ export default function FieldPage() {
   const displayPlants = plants.length > 0 ? plants : demoMode ? DEMO_PLANTS : [];
   const displayRobot = robotMarker ?? (demoMode ? DEMO_ROBOT : null);
   const hasAnyMap = displayPlants.length > 0 || !!displayRobot;
+  const leftSoil = latest?.soil_left_pct ?? null;
+  const rightSoil = latest?.soil_right_pct ?? null;
   const soil = latest?.soil_moisture;
-  const isWatering = latest?.relay === true;
+  const isWatering = latest?.relay === true || latest?.relay_left === true || latest?.relay_right === true;
   const statusText = latest?.status ?? "Waiting for a new robot reading";
 
   return (
     <DashboardShell title="Farm" subtitle="agribot-01">
       <>
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <FarmMetric icon={Droplets} label="Soil" value={soil != null ? `${soil.toFixed(0)}%` : "—"} />
+          <FarmMetric icon={Droplets} label="Left Soil" value={leftSoil != null ? `${leftSoil.toFixed(0)}%` : "—"} />
+          <FarmMetric icon={Droplets} label="Right Soil" value={rightSoil != null ? `${rightSoil.toFixed(0)}%` : "—"} />
           <FarmMetric icon={Thermometer} label="Temperature" value={latest?.temperature != null ? `${latest.temperature.toFixed(1)}°C` : "—"} />
           <FarmMetric icon={Wind} label="Humidity" value={latest?.humidity != null ? `${latest.humidity.toFixed(1)}%` : "—"} />
-          <FarmMetric icon={Ruler} label="Distance" value={latest?.distance_cm != null ? `${latest.distance_cm.toFixed(0)} cm` : "—"} />
+          <FarmMetric icon={Ruler} label="Left Distance" value={latest?.distance_left_cm != null ? `${latest.distance_left_cm.toFixed(0)} cm` : "—"} />
+          <FarmMetric icon={Ruler} label="Right Distance" value={latest?.distance_right_cm != null ? `${latest.distance_right_cm.toFixed(0)} cm` : "—"} />
         </div>
 
         <Card className="mb-4 p-4">
@@ -144,7 +148,8 @@ export default function FieldPage() {
               <p className="mt-1 text-xs text-muted dark:text-gray-400">{statusText}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
-              <StatusPill label="Pump" value={isWatering ? "ON" : "OFF"} active={isWatering} />
+              <StatusPill label="Left Pump" value={latest?.relay_left ? "ON" : "OFF"} active={latest?.relay_left === true} />
+              <StatusPill label="Right Pump" value={latest?.relay_right ? "ON" : "OFF"} active={latest?.relay_right === true} />
               <StatusPill label="Motor" value={latest?.motor ?? "—"} active={false} />
               <StatusPill label="Battery" value={latest?.battery_percent != null ? `${latest.battery_percent.toFixed(0)}%` : "—"} active={false} />
             </div>
@@ -189,7 +194,8 @@ export default function FieldPage() {
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <FarmMetric icon={Gauge} label="Robot state" value={latest?.motor ?? "—"} />
-          <FarmMetric icon={Power} label="Relay" value={latest?.relay == null ? "—" : latest.relay ? "ON" : "OFF"} />
+          <FarmMetric icon={Power} label="Left Relay" value={latest?.relay_left == null ? "—" : latest.relay_left ? "ON" : "OFF"} />
+          <FarmMetric icon={Power} label="Right Relay" value={latest?.relay_right == null ? "—" : latest.relay_right ? "ON" : "OFF"} />
           <FarmMetric icon={Battery} label="Battery voltage" value={latest?.battery_voltage != null ? `${latest.battery_voltage.toFixed(2)}V` : "—"} />
           <FarmMetric icon={Droplets} label="Watering status" value={isWatering ? "Watering" : "Idle"} />
         </div>
