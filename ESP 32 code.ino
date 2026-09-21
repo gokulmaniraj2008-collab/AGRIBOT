@@ -3,7 +3,7 @@
 //
 // Hardware:
 //   ESP32 + L298N
-//   2x HC-SR04 ultrasonic sensors = obstacle detection
+//   3x HC-SR04 ultrasonic sensors = obstacle detection
 //   1x IR position marker = plant station detection
 //   2x soil moisture sensors = LEFT + RIGHT, read in one cycle
 //   2x servos = one probe mechanism per plant
@@ -79,6 +79,9 @@ const char* SB_KEY =
 
 #define TRIG_LEFT 5
 #define ECHO_LEFT 18
+
+#define TRIG_FRONT 17
+#define ECHO_FRONT 22
 
 #define TRIG_RIGHT 19
 #define ECHO_RIGHT 21
@@ -173,6 +176,7 @@ float lastTemp = 0;
 float lastHum = 0;
 
 long leftDistance = -1;
+long frontDistance = -1;
 long rightDistance = -1;
 
 bool leftPump = false;
@@ -242,6 +246,7 @@ void readSensors() {
   rightSoil = readSoilPercent(SOIL_RIGHT_PIN);
 
   leftDistance = readUltrasonic(TRIG_LEFT, ECHO_LEFT);
+  frontDistance = readUltrasonic(TRIG_FRONT, ECHO_FRONT);
   rightDistance = readUltrasonic(TRIG_RIGHT, ECHO_RIGHT);
 
   float t = dht.readTemperature();
@@ -349,6 +354,10 @@ int minimumValidDistance() {
 
   if (leftDistance > 0) {
     result = min(result, (int)leftDistance);
+  }
+
+  if (frontDistance > 0) {
+    result = min(result, (int)frontDistance);
   }
 
   if (rightDistance > 0) {
@@ -463,6 +472,10 @@ void logEverything() {
     String(leftDistance) + ",";
 
   sensorBody +=
+    "\"distance_front_cm\":" +
+    String(frontDistance) + ",";
+
+  sensorBody +=
     "\"distance_right_cm\":" +
     String(rightDistance) + ",";
 
@@ -547,6 +560,10 @@ void logEverything() {
   logBody +=
     "\"distance_left_cm\":" +
     String(leftDistance) + ",";
+
+  logBody +=
+    "\"distance_front_cm\":" +
+    String(frontDistance) + ",";
 
   logBody +=
     "\"distance_right_cm\":" +
@@ -648,6 +665,12 @@ body{
     "<div class='card'>📡 LEFT Distance:"
     "<div class='value'>" +
     String(leftDistance) +
+    " cm</div></div>";
+
+  html +=
+    "<div class='card'>📡 FRONT Distance:"
+    "<div class='value'>" +
+    String(frontDistance) +
     " cm</div></div>";
 
   html +=
@@ -878,6 +901,9 @@ void setup() {
   pinMode(TRIG_LEFT, OUTPUT);
   pinMode(ECHO_LEFT, INPUT);
 
+  pinMode(TRIG_FRONT, OUTPUT);
+  pinMode(ECHO_FRONT, INPUT);
+
   pinMode(TRIG_RIGHT, OUTPUT);
   pinMode(ECHO_RIGHT, INPUT);
 
@@ -1096,6 +1122,12 @@ void loop() {
       ECHO_LEFT
     );
 
+  frontDistance =
+    readUltrasonic(
+      TRIG_FRONT,
+      ECHO_FRONT
+    );
+
   rightDistance =
     readUltrasonic(
       TRIG_RIGHT,
@@ -1112,12 +1144,17 @@ void loop() {
     leftDistance > 0 &&
     leftDistance < STOP_DISTANCE_CM;
 
+  bool frontObstacle =
+    frontDistance > 0 &&
+    frontDistance < STOP_DISTANCE_CM;
+
   bool rightObstacle =
     rightDistance > 0 &&
     rightDistance < STOP_DISTANCE_CM;
 
   if (
     leftObstacle ||
+    frontObstacle ||
     rightObstacle
   ) {
     motorsStop();
@@ -1131,8 +1168,9 @@ void loop() {
     );
 
     Serial.printf(
-      "LEFT %ld cm | RIGHT %ld cm\n",
+      "LEFT %ld cm | FRONT %ld cm | RIGHT %ld cm\n",
       leftDistance,
+      frontDistance,
       rightDistance
     );
 
