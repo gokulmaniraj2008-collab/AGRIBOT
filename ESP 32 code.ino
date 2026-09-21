@@ -154,6 +154,8 @@ DHT dht(DHT_PIN, DHT_TYPE);
 #define MAX_WATER_CYCLES 24
 
 // After servicing a station, move away from the marker.
+// stationLock is intentionally NOT cleared here; it is cleared
+// only after the IR marker becomes inactive.
 #define LEAVE_STATION_MS 3000
 
 // ============================================================
@@ -840,8 +842,8 @@ void servicePlants() {
 
   motorsStop();
 
-  stationLock = false;
-
+  // Keep the station locked until the IR marker is physically cleared.
+  // This prevents the same marker from triggering the watering cycle again.
   statusText =
     "Ready for next plant marker";
 
@@ -1053,6 +1055,38 @@ void loop() {
   server.handleClient();
 
   // ----------------------------------------------------------
+  // IR marker = plant station
+  // IMPORTANT:
+  // Check the station marker BEFORE ultrasonic obstacle logic.
+  // A plant may be close enough to appear as an ultrasonic
+  // obstacle, but the IR marker tells us this is a service stop.
+  // ----------------------------------------------------------
+
+  bool marker =
+    plantMarkerDetected();
+
+  // Unlock only after the robot has physically left the marker.
+  // This creates a LOW -> HIGH -> LOW trigger cycle instead of
+  // repeatedly servicing the same station.
+  if (!marker && stationLock) {
+    stationLock = false;
+  }
+
+  if (
+    marker &&
+    !stationLock
+  ) {
+    stationLock = true;
+
+    plantPosition =
+      "LEFT + RIGHT";
+
+    servicePlants();
+
+    return;
+  }
+
+  // ----------------------------------------------------------
   // Read ultrasonic sensors
   // ----------------------------------------------------------
 
@@ -1106,27 +1140,6 @@ void loop() {
 
     // Stay stopped until obstacle is removed.
     delay(100);
-    return;
-  }
-
-  // ----------------------------------------------------------
-  // IR marker = plant station
-  // ----------------------------------------------------------
-
-  bool marker =
-    plantMarkerDetected();
-
-  if (
-    marker &&
-    !stationLock
-  ) {
-    stationLock = true;
-
-    plantPosition =
-      "LEFT + RIGHT";
-
-    servicePlants();
-
     return;
   }
 
