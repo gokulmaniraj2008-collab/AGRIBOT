@@ -165,10 +165,10 @@ export default function DashboardClient({
       </div>
 
       <div className="mb-4">
-        <AIBanner text={aiTip} cta="AI recommendation" />
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900/60 dark:bg-violet-950/20"><AIBanner text={aiTip} cta="AI recommendation" /></div>
       </div>
 
-      <Card className="mb-4 overflow-hidden p-4">
+      <Card className="mb-4 overflow-hidden border-blue-200 bg-blue-50/70 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className={`flex h-11 w-11 items-center justify-center rounded-full ${isFresh ? "bg-green-500/10 text-green-600" : "bg-gray-500/10 text-gray-500"}`}>
@@ -191,29 +191,29 @@ export default function DashboardClient({
 
       <SectionHeading eyebrow="Live system" title="Everything in one view" />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard icon={Droplets} label="Left Soil" value={leftSoil != null ? leftSoil.toFixed(0) : "—"} unit="%" percent={leftSoil ?? undefined} />
-        <StatCard icon={Droplets} label="Right Soil" value={rightSoil != null ? rightSoil.toFixed(0) : "—"} unit="%" percent={rightSoil ?? undefined} />
-        <StatCard icon={Wind} label="Humidity" value={latest?.humidity != null ? latest.humidity.toFixed(0) : "—"} unit="%" percent={latest?.humidity ?? undefined} />
-        <StatCard icon={Thermometer} label="Temperature" value={latest?.temperature != null ? latest.temperature.toFixed(1) : "—"} unit="°C" />
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-1 dark:border-emerald-900/50 dark:bg-emerald-950/20"><StatCard icon={Droplets} label="Left Soil" value={leftSoil != null ? leftSoil.toFixed(0) : "—"} unit="%" percent={leftSoil ?? undefined} />
+        </div><div className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-1 dark:border-cyan-900/50 dark:bg-cyan-950/20"><StatCard icon={Droplets} label="Right Soil" value={rightSoil != null ? rightSoil.toFixed(0) : "—"} unit="%" percent={rightSoil ?? undefined} />
+        </div><div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-1 dark:border-sky-900/50 dark:bg-sky-950/20"><StatCard icon={Wind} label="Humidity" value={latest?.humidity != null ? latest.humidity.toFixed(0) : "—"} unit="%" percent={latest?.humidity ?? undefined} />
+        </div><div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-1 dark:border-orange-900/50 dark:bg-orange-950/20"><StatCard icon={Thermometer} label="Temperature" value={latest?.temperature != null ? latest.temperature.toFixed(1) : "—"} unit="°C" /></div>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <PlantCard
+        <div className="rounded-2xl border border-lime-200 bg-lime-50/60 p-1 dark:border-lime-900/50 dark:bg-lime-950/20"><PlantCard
           side="Left Plant"
           soil={leftSoil}
           pump={leftPump}
           distance={latest?.distance_left_cm}
-        />
-        <PlantCard
+        /></div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-1 dark:border-amber-900/50 dark:bg-amber-950/20"><PlantCard
           side="Right Plant"
           soil={rightSoil}
           pump={rightPump}
           distance={latest?.distance_right_cm}
-        />
+        /></div>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-        <Card className="p-4">
+        <Card className="border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-bold text-foreground dark:text-gray-100">Soil intelligence</p>
@@ -239,7 +239,7 @@ export default function DashboardClient({
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="border-fuchsia-200 bg-fuchsia-50/50 p-4 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/20">
           <div className="mb-3 flex items-center gap-2">
             <Bot className="h-4 w-4 text-primary" />
             <div>
