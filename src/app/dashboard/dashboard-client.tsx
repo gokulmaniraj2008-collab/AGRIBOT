@@ -29,6 +29,7 @@ export default function DashboardClient({
   const [homeVideos, setHomeVideos] = useState<HomeVideo[]>(initialHomeVideos);
   const [commandBusy, setCommandBusy] = useState<string | null>(null);
   const [commandMessage, setCommandMessage] = useState("");
+  const [aiMessageBusy, setAiMessageBusy] = useState(false);
 
   useEffect(() => {
     const poll = async () => {
@@ -113,6 +114,25 @@ export default function DashboardClient({
         : latest?.battery_percent != null && latest.battery_percent < 20
           ? "Battery is below 20%. Charge the robot before starting another field run."
           : "Both plant zones are currently above the irrigation threshold. Continue monitoring.";
+
+  async function sendAiComment() {
+    setAiMessageBusy(true);
+    setCommandMessage("");
+    try {
+      const response = await fetch("/api/device/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: aiTip, level: "info" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "Failed to send AI comment");
+      setCommandMessage("AI comment sent to ESP32.");
+    } catch (error) {
+      setCommandMessage(error instanceof Error ? error.message : "Failed to send AI comment");
+    } finally {
+      setAiMessageBusy(false);
+    }
+  }
 
   async function sendCommand(command: string, value?: number) {
     setCommandBusy(command);
@@ -251,6 +271,7 @@ export default function DashboardClient({
           <CommandButton icon={Zap} label="Manual Mode" onClick={() => sendCommand("set_mode_manual")} busy={commandBusy === "set_mode_manual"} />
           <CommandButton icon={Droplets} label="Auto Irrigation" onClick={() => sendCommand("set_irrigation_auto_on")} busy={commandBusy === "set_irrigation_auto_on"} />
           <CommandButton icon={ShieldAlert} label="Safety Reset" onClick={() => sendCommand("safety_reset")} busy={commandBusy === "safety_reset"} />
+          <CommandButton icon={Lightbulb} label="Send AI Comment" onClick={sendAiComment} busy={aiMessageBusy} />
         </div>
         {commandMessage && <p className="mt-3 text-xs font-medium text-primary">{commandMessage}</p>}
       </Card>
