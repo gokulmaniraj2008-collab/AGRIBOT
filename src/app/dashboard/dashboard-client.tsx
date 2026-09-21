@@ -182,16 +182,12 @@ export default function DashboardClient({
           soil={leftSoil}
           pump={leftPump}
           distance={latest?.distance_left_cm}
-          onWater={() => sendCommand("pump_on")}
-          busy={commandBusy === "pump_on"}
         />
         <PlantCard
           side="Right Plant"
           soil={rightSoil}
           pump={rightPump}
           distance={latest?.distance_right_cm}
-          onWater={() => sendCommand("pump_on")}
-          busy={commandBusy === "pump_on"}
         />
       </div>
 
@@ -272,14 +268,12 @@ export default function DashboardClient({
 }
 
 function PlantCard({
-  side, soil, pump, distance, onWater, busy,
+  side, soil, pump, distance,
 }: {
   side: string;
   soil: number | null | undefined;
   pump: boolean;
   distance: number | null | undefined;
-  onWater: () => void;
-  busy: boolean;
 }) {
   const dry = soil != null && soil < 30;
   return (
@@ -297,15 +291,6 @@ function PlantCard({
         <MiniMetric icon={Droplets} label="Soil" value={soil != null ? `${soil.toFixed(0)}%` : "—"} active={dry} />
         <MiniMetric icon={Ruler} label="Distance" value={distance != null ? `${distance.toFixed(0)} cm` : "—"} />
       </div>
-      <button
-        type="button"
-        onClick={onWater}
-        disabled={busy}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        <Droplets className="h-4 w-4" />
-        {busy ? "Sending…" : "Water zone"}
-      </button>
     </Card>
   );
 }
