@@ -106,13 +106,17 @@ export default function DashboardClient({
 
   const chartData = chronological.map((r) => ({
     time: formatAgriBotTimeOnly(r.created_at).slice(0, 5),
-    soil: r.soil_moisture,
+    leftSoil: r.soil_left_pct,
+    rightSoil: r.soil_right_pct,
   }));
 
   const lastUpdated = latest?.created_at ? formatAgriBotTimeOnly(latest.created_at) : null;
 
   const aiTip =
-    latest?.soil_moisture != null && latest.soil_moisture < 30
+    (latest?.soil_left_pct != null && latest.soil_left_pct < 30) ||
+    (latest?.soil_right_pct != null && latest.soil_right_pct < 30)
+      ? "One or both plant zones are dry. Check irrigation status."
+      : latest?.soil_moisture != null && latest.soil_moisture < 30
       ? "Soil moisture is trending low. Consider running irrigation soon."
       : latest?.battery_percent != null && latest.battery_percent < 20
       ? "Robot battery is low — schedule a charging cycle before the next run."
@@ -147,11 +151,19 @@ export default function DashboardClient({
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard
             icon={Droplets}
-            label="Soil Moisture"
-            value={latest?.soil_moisture != null ? latest.soil_moisture.toFixed(0) : "—"}
+            label="Left Soil"
+            value={latest?.soil_left_pct != null ? latest.soil_left_pct.toFixed(0) : "—"}
             unit="%"
             color="#0ea5e9"
-            percent={latest?.soil_moisture ?? undefined}
+            percent={latest?.soil_left_pct ?? undefined}
+          />
+          <StatCard
+            icon={Droplets}
+            label="Right Soil"
+            value={latest?.soil_right_pct != null ? latest.soil_right_pct.toFixed(0) : "—"}
+            unit="%"
+            color="#0891b2"
+            percent={latest?.soil_right_pct ?? undefined}
           />
           <StatCard
             icon={Wind}
@@ -202,7 +214,8 @@ export default function DashboardClient({
                     fontSize: 12,
                   }}
                 />
-                <Line type="monotone" dataKey="soil" stroke="#16a34a" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="leftSoil" name="Left soil %" stroke="#16a34a" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="rightSoil" name="Right soil %" stroke="#0ea5e9" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
