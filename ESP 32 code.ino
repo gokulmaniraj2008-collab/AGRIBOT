@@ -39,6 +39,84 @@
 const char* WIFI_SSID = "AGRIBOT_WIFI";
 const char* WIFI_PASS = "12345678";
 
+// Website -> ESP32 AI message channel.
+const char* AGRIBOT_DEVICE_TOKEN = "CHANGE_ME_DEVICE_TOKEN";
+const char* AI_MESSAGE_URL = "https://agribot.website/api/device/messages";
+unsigned long lastAiMessagePoll = 0;
+const unsigned long AI_MESSAGE_POLL_MS = 3000;
+String latestAiComment = "";
+
+String jsonStringValue(const String& json, const String& key) {
+  String marker = "\"" + key + "\":\"";
+  int start = json.indexOf(marker);
+  if (start < 0) return "";
+  start += marker.length();
+  int end = start;
+  bool escaped = false;
+  while (end < (int)json.length()) {
+    char c = json[end];
+    if (c == '"' && !escaped) break;
+    if (c == '\\' && !escaped) escaped = true;
+    else escaped = false;
+    end++;
+  }
+  String value = json.substring(start, end);
+  value.replace("\\\"", "\"");
+  value.replace("\\\\", "\\");
+  return value;
+}
+
+void acknowledgeAiMessage(int id) {
+  if (WiFi.status() != WL_CONNECTED || id <= 0) return;
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  if (!http.begin(client, AI_MESSAGE_URL)) return;
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-agribot-device-token", AGRIBOT_DEVICE_TOKEN);
+  String body = "{\"id\":" + String(id) + "}";
+  int code = http.POST(body);
+  Serial.printf("AI message ACK: HTTP %d\n", code);
+  http.end();
+}
+
+void pollAiComment() {
+  if (millis() - lastAiMessagePoll < AI_MESSAGE_POLL_MS) return;
+  lastAiMessagePoll = millis();
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (String(AGRIBOT_DEVICE_TOKEN) == "CHANGE_ME_DEVICE_TOKEN") return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  if (!http.begin(client, AI_MESSAGE_URL)) return;
+  http.addHeader("x-agribot-device-token", AGRIBOT_DEVICE_TOKEN);
+
+  int code = http.GET();
+  if (code == HTTP_CODE_OK) {
+    String response = http.getString();
+    String message = jsonStringValue(response, "message");
+    String idText = jsonStringValue(response, "id");
+
+    if (message.length() > 0) {
+      latestAiComment = message;
+      statusText = "AI: " + message;
+
+      Serial.println("================================");
+      Serial.println("AI COMMENT FROM WEBSITE");
+      Serial.println(message);
+      Serial.println("================================");
+
+      acknowledgeAiMessage(idText.toInt());
+      logEverything();
+    }
+  }
+
+  http.end();
+}
+
+
+
 WebServer server(80);
 
 // ============================================================
@@ -193,6 +271,7 @@ void waitMs(unsigned long ms) {
 
   while (millis() - start < ms) {
     server.handleClient();
+  pollAiComment();
     delay(10);
   }
 }
