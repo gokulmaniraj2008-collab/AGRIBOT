@@ -8,7 +8,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { Card, StatCard, AIBanner, SectionHeading } from "@/components/ui-kit";
 import VideoQuickBox from "@/components/video-quick-box";
 import {
-  Battery, Bot, CircleDot, Droplets, Gauge, Lightbulb, MapPin,
+  Bot, CircleDot, Droplets, Gauge, Lightbulb, MapPin,
   Play, Power, Ruler, ShieldAlert, Square, Thermometer, Wind, Zap,
 } from "lucide-react";
 import {
@@ -111,9 +111,7 @@ export default function DashboardClient({
         : "Left plant is below the 30% threshold. A left-zone watering cycle is recommended."
       : rightSoil != null && rightSoil < 30
         ? "Right plant is below the 30% threshold. A right-zone watering cycle is recommended."
-        : latest?.battery_percent != null && latest.battery_percent < 20
-          ? "Battery is below 20%. Charge the robot before starting another field run."
-          : "Both plant zones are currently above the irrigation threshold. Continue monitoring.";
+        : "Both plant zones are currently above the irrigation threshold. Continue monitoring.";
 
   async function sendAiComment() {
     setAiMessageBusy(true);
@@ -187,18 +185,16 @@ export default function DashboardClient({
             <StatusPill label="Motor" value={latest?.motor ?? "—"} />
             <StatusPill label="Left pump" value={leftPump ? "ON" : "OFF"} active={leftPump} />
             <StatusPill label="Right pump" value={rightPump ? "ON" : "OFF"} active={rightPump} />
-            <StatusPill label="Battery" value={latest?.battery_percent != null ? `${latest.battery_percent.toFixed(0)}%` : "—"} />
           </div>
         </div>
       </Card>
 
       <SectionHeading eyebrow="Live system" title="Everything in one view" />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard icon={Droplets} label="Left Soil" value={leftSoil != null ? leftSoil.toFixed(0) : "—"} unit="%" percent={leftSoil ?? undefined} />
         <StatCard icon={Droplets} label="Right Soil" value={rightSoil != null ? rightSoil.toFixed(0) : "—"} unit="%" percent={rightSoil ?? undefined} />
         <StatCard icon={Wind} label="Humidity" value={latest?.humidity != null ? latest.humidity.toFixed(0) : "—"} unit="%" percent={latest?.humidity ?? undefined} />
         <StatCard icon={Thermometer} label="Temperature" value={latest?.temperature != null ? latest.temperature.toFixed(1) : "—"} unit="°C" />
-        <StatCard icon={Battery} label="Battery" value={latest?.battery_percent != null ? latest.battery_percent.toFixed(0) : "—"} unit="%" percent={latest?.battery_percent ?? undefined} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -255,9 +251,6 @@ export default function DashboardClient({
             <Insight icon={Lightbulb} title="Current decision" text={aiTip} />
             <Insight icon={MapPin} title="Station" text={latest?.plant_position || "Waiting for station marker"} />
             <Insight icon={Ruler} title="Obstacle sensing" text={`Front ${frontDistance?.toFixed(0) ?? "—"} cm · Left ${leftDistance?.toFixed(0) ?? "—"} cm · Right ${rightDistance?.toFixed(0) ?? "—"} cm`} />
-            {latest?.battery_percent != null && latest.battery_percent < 20 && (
-              <Insight icon={ShieldAlert} title="Safety" text="Low battery: avoid starting a long mission." />
-            )}
           </div>
         </Card>
       </div>
