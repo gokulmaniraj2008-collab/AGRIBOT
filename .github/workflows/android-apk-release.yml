@@ -29,6 +29,19 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Generate Android project
+        run: |
+          flutter create --platforms=android --org ai.agribot .
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          permission = '    <uses-permission android:name="android.permission.INTERNET" />\n'
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + permission)
+              p.write_text(s)
+          PY
+
       - name: Get dependencies
         run: flutter pub get
 
@@ -41,15 +54,8 @@ jobs:
           name: AGRIBOT-Android
           path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Attach APK to GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
-          generate_release_notes: true
-
-      - name: Create v1.0.0 release from release branch
-        if: github.ref == 'refs/heads/release/v1.0.0'
+      - name: Create v1.0.0 release
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release/v1.0.0'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
