@@ -1,36 +1,15 @@
 {
-  "name": "agribot-dashboard",
-  "version": "0.1.0",
+  "name": "agribot-coming-soon",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "test": "vitest run"
+    "start": "next start"
   },
   "dependencies": {
-    "@supabase/ssr": "0.5.2",
-    "@supabase/supabase-js": "^2.111.0",
-    "leaflet": "^1.9.4",
-    "react-leaflet": "^5.0.0",
-    "lucide-react": "0.469.0",
-    "next": "^15.5.22",
+    "next": "15.5.22",
     "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "recharts": "2.15.0"
-  },
-  "devDependencies": {
-    "@types/node": "22.10.5",
-    "@types/react": "19.0.4",
-    "@types/react-dom": "19.0.2",
-    "@types/leaflet": "^1.9.21",
-    "autoprefixer": "10.4.20",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "15.1.6",
-    "postcss": "8.4.49",
-    "tailwindcss": "3.4.17",
-    "typescript": "5.7.3",
-    "vitest": "^3.2.4"
+    "react-dom": "19.0.0"
   }
 }
